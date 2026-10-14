@@ -1,0 +1,51 @@
+# ⚙️ AI Job Hunter Configuration (config.yaml)
+
+# Настройки сканирования почты Gmail
+gmail:
+  target_labels:
+    - "Glassdoor"
+    - "LinkedIn"
+    - "Michael Page"
+    - "Stepstone.de"
+  
+  # Максимальный возраст писем для обработки (в днях)
+  max_letter_age_days: 2
+
+  # Ключевые слова на основе вашего стека (Java / Spring Boot / Full-Stack)
+  keywords_filter:
+    - "Java"
+    - "Spring Boot"
+    - "Full-Stack"
+    - "Backend"
+    - "Software Developer"
+    - "Software Engineer"
+    - "Angular"
+    - "TypeScript"
+    - "Healthcare"
+    - "Microservices"
+
+# Настройки генерации ИИ и языковая политика
+ai_settings:
+  # Основной язык для генерации писем (en - English C1)
+  response_language: "en" 
+  
+  # Порог отсечения релевантности (0-100)
+  min_match_score_to_draft: 65
+
+  # Стоп-слова для отфильтровывания ненужных позиций
+  blacklisted_keywords:
+    - "Junior"
+    - "Intern"
+    - "PHP"
+    - "Ruby"
+    - "Python Developer"
+    - "On-site mandatory"
+
+# Google Drive / Docs интеграция
+google_docs:
+  master_resume_doc_id: "your_google_doc_id_here"
+  output_folder_id: "your_google_drive_folder_id_here"
+
+# Лимиты обработки за один запуск
+limits:
+  max_jobs_per_run: 5
