@@ -5,6 +5,7 @@ The system operates on a Human-in-the-Loop model: the agent automates all tediou
 
 
 📐 System Architecture
+```text
 ┌──────────────┐     ┌─────────────────────┐     ┌──────────────────────┐
 │  Gmail API   │ --> │ GmailJobCollector   │ --> │  JobAnalyzerAgent    │
 │ (Target      │     │ (Scan Labels &      │     │  (LLM / Claude API)  │
@@ -19,7 +20,7 @@ The system operates on a Human-in-the-Loop model: the agent automates all tediou
 │ Telegram Bot │ <-- │  Gmail Executor     │ <-- │ GoogleDriveManager   │
 │(Notification)│     │  (Create Draft)     │     │ (Clone, Tailor, PDF) │
 └──────────────┘     └─────────────────────┘     └──────────────────────┘
-
+```
 
 ⚙️ Dynamic Configuration (config.yaml)
 The system reads scan rules, keyword filters, and AI behavior policies from config.yaml:
