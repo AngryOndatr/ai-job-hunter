@@ -11,7 +11,7 @@ The system adheres to a **Human-in-the-Loop** architecture: the agent automates 
 ```text
 ┌──────────────┐     ┌─────────────────────┐     ┌──────────────────────┐
 │  Gmail API   │ --> │ GmailJobCollector   │ --> │  JobAnalyzerAgent    │
-│  (Incoming)  │     │ (Scan & Deduplicate)│     │  (LLM / Claude API)  │
+│  (Incoming)  │     │ (Scan & Deduplicate)│     │  (LLM / Gemini API)  │
 └──────────────┘     └─────────────────────┘     └──────────────────────┘
                                                             │
                                                             ▼
@@ -23,7 +23,7 @@ The system adheres to a **Human-in-the-Loop** architecture: the agent automates 
 ## System Architecture Overview
 
 1. **Gmail Ingestion:** Scans targeted folders/labels for new job notification emails and filters out duplicates using `processed_ids.json`.
-2. **AI Job Analysis:** Claude 3.5 Sonnet compares job requirements with your master resume, generating a match score and cover letter text.
+2. **AI Job Analysis:** gemini-1.5-flash compares job requirements with your master resume, generating a match score and cover letter text.
 3. **Document Generation:** Clones your master resume on Google Drive, updates sections using Google Docs API, and exports a tailored PDF.
 4. **Gmail Execution:** Creates a draft email in Gmail containing the cover letter and attached PDF resume.
 5. **Notification:** Sends an immediate digest alert with direct links via Telegram Bot.
@@ -84,16 +84,24 @@ pip install -r requirements.txt
 3. Provide your Google Docs master resume template ID and target Google Drive output folder ID.
 4. Define technical keywords, blacklisted terms, and response language.
 
-### 3. Google Cloud API Credentials
+### 3. Google Workspace Credentials (credentials.json & token.json)
 1. Navigate to the [Google Cloud Console](https://console.cloud.google.com/).
-2. Enable the **Gmail API**, **Google Drive API**, and **Google Docs API**.
-3. Create an **OAuth 2.0 Client ID** (Application Type: *Desktop App*).
+2. Enable the **Gmail API**, **Google Drive API** и **Google Docs API**.
+3. Create an **OAuth 2.0 Client ID** (Тип приложения: *Desktop App* / *Рабочий стол*).
 4. Download the JSON credential file, rename it to `credentials.json`, and place it in the root directory.
+5. Запустите скрипт локально в первый раз, чтобы пройти авторизацию в браузере и сгенерировать `token.json`.
 
-### 4. Environment Variables Configuration
+### 4. Gemini API Key (GEMINI_API_KEY)
+1. Перейдите в [Google AI Studio](https://aistudio.google.com/).
+2. Нажмите **Get API key** -> **Create API key**.
+3. Скопируйте сгенерированный ключ и добавьте его:
+    - Для локальной разработки: в файл `.env` как `GEMINI_API_KEY=AIzaSy...`
+    - Для GitHub Actions: в секреты репозитория (`Settings -> Secrets and variables -> Actions`) с именем `GEMINI_API_KEY`.
+
+### 5. Environment Variables Configuration
 Copy `.env.example` to create your local `.env` file and populate it with your keys:
 ```bash
-ANTHROPIC_API_KEY=your_anthropic_api_key_here
+GEMINI_API_KEY=your_gemini_api_key_here
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
 TELEGRAM_CHAT_ID=your_telegram_chat_id_here
 ```

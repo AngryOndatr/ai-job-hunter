@@ -44,29 +44,27 @@ AI Policy: Output response language (en), cutoff threshold (min_match_score_to_d
 
 
 🔑 Required Credentials & Token Acquisition Guide
-1. Google Drive Template ID & Folder ID
-   Google Docs Resume Template ID: Open your master resume in Google Docs. Copy the ID from the browser URL: /document/d/YOUR_TEMPLATE_ID/edit.
-   Google Drive Target Folder ID: Open the target export folder in Google Drive. Copy the ID from the URL: /drive/folders/YOUR_FOLDER_ID.
-2. Google OAuth Credentials (credentials.json & token.json)
-   In Google Cloud Console, enable Gmail API, Google Drive API, and Google Docs API.
-   Create an OAuth 2.0 Client ID for Desktop Application.
-   Download the JSON, rename it to credentials.json, and place it in the project root.
-   Run python main.py locally once to authenticate in the browser and auto-generate token.json.
-3. Telegram Bot Token & Chat ID
-   Create a new bot via @BotFather to get the TELEGRAM_BOT_TOKEN.
-   Send a message to your bot, then open https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getUpdates to find your numerical TELEGRAM_CHAT_ID.
-4. Anthropic API Key
-   Generate an API key from the Anthropic Console dashboard and save it as ANTHROPIC_API_KEY.
+1. Google Drive Template ID & Folder ID (в config.yaml)
+   - Google Docs Resume Template ID: Откройте мастер-резюме в Google Docs и скопируйте ID из URL: `/document/d/YOUR_TEMPLATE_ID/edit`. Укажите его в `config.yaml` в `google_docs.master_resume_doc_id`.
+   - Google Drive Target Folder ID: Откройте папку для экспорта в Google Drive и скопируйте ID из URL: `/drive/folders/YOUR_FOLDER_ID`. Укажите его в `config.yaml` в `google_docs.output_folder_id`.
 
+2. Google OAuth Credentials (credentials.json & token.json)
+   - В Google Cloud Console включите **Gmail API**, **Google Drive API** и **Google Docs API**.
+   - Создайте **OAuth 2.0 Client ID** для Desktop Application (Приложение для рабочего стола).
+   - Скачайте JSON-файл с ключами, переименуйте его в `credentials.json` и поместите в корень проекта.
+   - Запустите `python main.py` локально в первый раз, чтобы пройти авторизацию в браузере и сгенерировать `token.json`.
+3. Telegram Bot Token & Chat ID
+   - Create a new bot via @BotFather to get the TELEGRAM_BOT_TOKEN.
+   - Send a message to your bot, then open https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getUpdates to find your numerical TELEGRAM_CHAT_ID.
 
 🔑 GitHub Secrets Configuration
 To allow the cloud pipeline to authenticate with Google APIs and notify you, configure the following secrets under your GitHub repository settings (Settings -> Secrets and variables -> Actions):
 
-| Secret Name | Description | Example Value |
-|-------------|-------------|---------------|
-| ANTHROPIC_API_KEY | Anthropic Claude API Key | sk-ant-api03-... |
-| TELEGRAM_BOT_TOKEN | Telegram Bot Token from @BotFather | 123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ |
-| TELEGRAM_CHAT_ID | Your personal numerical chat ID | 987654321 |
+| Secret Name | Description                                | Example Value |
+|-------------|--------------------------------------------|---------------|
+| GEMINI_API_KEY | Google Gemini API Key                      | sk-ant-api03-... |
+| TELEGRAM_BOT_TOKEN | Telegram Bot Token from @BotFather         | 123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ |
+| TELEGRAM_CHAT_ID | Your personal numerical chat ID            | 987654321 |
 | GOOGLE_TOKEN_JSON | Full content of your local token.json file | {"token": "...", "refresh_token": "...", ...} |
 
 
