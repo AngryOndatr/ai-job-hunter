@@ -97,6 +97,8 @@ The master resume template should contain double-brace placeholders for sections
 
 `gmail_executor.py` creates a Gmail draft from the generated cover letter and PDF. Job data must include an explicit application address in `application_email` or `recipient`; the sender of a job alert is never treated as the employer's application address. The executor creates drafts only and does not send email.
 
+`telegram_notifier.py` sends a plain-text notification with the role, company, match score, analysis summary, and Gmail draft link using `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` from the environment.
+
 ### 4. Gemini API Key (GEMINI_API_KEY)
 1. Перейдите в [Google AI Studio](https://aistudio.google.com/).
 2. Нажмите **Get API key** -> **Create API key**.

@@ -26,7 +26,7 @@ This document outlines the step-by-step roadmap for implementing the **AI Job Hu
 
 ## 📤 Phase 5: Executor & Notification Module (`gmail_executor.py` & `telegram_notifier.py`)
 - [x] **Task #10:** Implement Gmail draft creation, attaching the tailored PDF resume and inserting the generated cover letter.
-- [ ] **Task #11:** Build the Telegram notification sender to dispatch instant success/summary alerts with deep links.
+- [x] **Task #11:** Build the Telegram notification sender to dispatch instant success/summary alerts with deep links.
 
 ## 🚀 Phase 6: Orchestration & Cloud Deployment (`main.py` & CI/CD)
 - [ ] **Task #12:** Implement `main.py` pipeline orchestrator connecting all modules.
