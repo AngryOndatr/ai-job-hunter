@@ -12,6 +12,7 @@ token.json
 
 # Runtime tracking & State files
 processed_ids.json
+tmp.txt
 
 # IDE configuration
 .idea/

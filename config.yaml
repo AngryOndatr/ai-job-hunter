@@ -31,14 +31,14 @@ filters:
 
 ai_policy:
   language: "en"
-  provider: "google"  # Переключено на Google Gemini
-  model: "gemini-1.5-flash"
+  provider: "google"
+  model: "gemini-3.8-flash"
   min_match_score_to_draft: 75  # Минимальный балл совпадения для создания черновика
 
 # Google Drive / Docs интеграция
 google_docs:
-  master_resume_doc_id: "your_google_doc_id_here"
-  output_folder_id: "your_google_drive_folder_id_here"
+  master_resume_doc_id: "1e39ScAf0jdV74cxp8WvpIiAXBwMxvUfgWyeLCoNeDSY"
+  output_folder_id: "1fhZLdphKY6Gl1P-P01PPxSaqvonmr1R5"
 
 paths:
   credentials_file: "credentials.json"

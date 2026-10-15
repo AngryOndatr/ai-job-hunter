@@ -9,18 +9,18 @@ This document outlines the step-by-step roadmap for implementing the **AI Job Hu
 - [x] Create and clean project documentation (`README.md`, `CLAUDE.md`).
 - [x] Define Gmail target labels (`Glassdoor`, `LinkedIn`, `Michael Page`, `Stepstone.de`) and platform responsibilities.
 
-## ⚙️ Phase 2: Configuration & Core Data Structures (Current)
+## ⚙️ Phase 2: Configuration & Core Data Structures
 - [ ] **Task #1:** Create `config.yaml` for dynamic configuration (labels, keywords, match thresholds, language settings).
-- [ ] **Task #2:** Create `.env.example` template for environment secrets (`ANTHROPIC_API_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`).
-- [ ] **Task #3:** Set up `requirements.txt` with essential dependencies (`google-api-python-client`, `google-auth-oauthlib`, `anthropic`, `python-dotenv`, `requests`, `pyyaml`).
+- [ ] **Task #2:** Create `.env.example` template for environment secrets (`GEMINI_API_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`).
+- [ ] **Task #3:** Set up `requirements.txt` with essential dependencies (`google-api-python-client`, `google-auth-oauthlib`, `google-genai`, `python-dotenv`, `requests`, `pyyaml`).
 
-## 📥 Phase 3: Ingestion Module (`gmail_collector.py`)
-- [ ] **Task #4:** Implement Gmail API authentication and service initialization (`credentials.json` / `token.json`).
-- [ ] **Task #5:** Develop `GmailJobCollector` to scan targeted labels by message age (`max_email_age_days`) and keywords.
-- [ ] **Task #6:** Implement deduplication logic via `processed_ids.json` to prevent reprocessing the same job alert.
+## 📥 Phase 3: Ingestion Module (`gmail_collector.py`) (Completed)
+- [x] **Task #4:** Implement Gmail API authentication and service initialization (`credentials.json` / `token.json`).
+- [x] **Task #5:** Develop `GmailJobCollector` to scan targeted labels by message age (`max_email_age_days`) and keywords.
+- [x] **Task #6:** Implement deduplication logic via `processed_ids.json` to prevent reprocessing the same job alert.
 
 ## 🤖 Phase 4: AI Analysis & Tailoring Module (`ai_tailor.py` & `drive_service.py`)
-- [ ] **Task #7:** Integrate Anthropic Claude 3.5 Sonnet API to analyze job descriptions against the user's master profile (Java, Spring Boot, Full-Stack).
+- [ ] **Task #7:** Integrate Google Gemini `gemini-3.8-flash` to analyze job descriptions against the user's master profile (Java, Spring Boot, Full-Stack), using `GEMINI_API_KEY` and the configured language and match threshold.
 - [ ] **Task #8:** Implement Google Drive & Docs API manager to clone the master resume template, inject tailored content, and export as PDF.
 - [ ] **Task #9:** Generate dynamic, context-aware Cover Letters in the configured language.
 
