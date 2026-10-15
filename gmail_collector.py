@@ -39,7 +39,7 @@ class GmailJobCollector:
 
     def _save_processed_ids(self):
         with open(self.processed_ids_file, "w", encoding="utf-8") as f:
-            json.dump(list(self.processed_ids), f, indent=2)
+            json.dump(sorted(self.processed_ids), f, indent=2)
 
     def fetch_new_job_emails(self, defer_processed=False):
         """Сканирует новые письма по целевым меткам с учетом даты и дедупликации."""

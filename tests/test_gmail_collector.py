@@ -56,6 +56,16 @@ class GmailJobCollectorTests(unittest.TestCase):
         self.assertIn("message-1", self.collector.processed_ids)
         self.assertEqual(json.loads(self.processed_path.read_text(encoding="utf-8")), ["message-1"])
 
+    def test_processed_id_file_is_written_in_stable_sorted_order(self):
+        self.collector.processed_ids = {"message-z", "message-a"}
+
+        self.collector._save_processed_ids()
+
+        self.assertEqual(
+            json.loads(self.processed_path.read_text(encoding="utf-8")),
+            ["message-a", "message-z"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

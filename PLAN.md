@@ -30,5 +30,5 @@ This document outlines the step-by-step roadmap for implementing the **AI Job Hu
 
 ## 🚀 Phase 6: Orchestration & Cloud Deployment (`main.py` & CI/CD)
 - [x] **Task #12:** Implement `main.py` pipeline orchestrator connecting all modules.
-- [ ] **Task #13:** Configure GitHub Actions workflow (`.github/workflows/run_agent.yml`) with automated cron triggers and secret injection.
+- [x] **Task #13:** Configure GitHub Actions workflow (`.github/workflows/run_agent.yml`) with automated cron triggers and secret injection.
 - [ ] **Task #14:** End-to-end dry run and verification in the hybrid environment.

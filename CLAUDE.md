@@ -72,41 +72,11 @@ Configure these secrets under **Settings → Secrets and variables → Actions**
 | `TELEGRAM_CHAT_ID` | Your numerical chat ID | `987654321` |
 | `GOOGLE_TOKEN_JSON` | Full content of your local `token.json` file | `{"token":"...","refresh_token":"..."}` |
 
-## 🚀 Planned GitHub Actions Workflow (`.github/workflows/run_agent.yml`, Phase 6.2)
+## 🚀 GitHub Actions Workflow (`.github/workflows/run_agent.yml`)
 
-```yaml
-name: AI Job Hunter Cloud Runner
-
-on:
-  schedule:
-    - cron: '0 8 * * *'
-  workflow_dispatch:
-
-jobs:
-  run-pipeline:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-
-      - name: Set up Python 3.10
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
-      - name: Inject Google Token Secret
-        run: |
-          echo '${{ secrets.GOOGLE_TOKEN_JSON }}' > token.json
-
-      - name: Execute Main Pipeline
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python main.py
-```
+- Runs daily at 08:00 UTC and can be started manually with `workflow_dispatch`.
+- Uses Python 3.11, installs dependencies from `requirements.txt`, and runs `main.py`.
+- Requires the `GEMINI_API_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, and `GOOGLE_TOKEN_JSON` repository secrets.
+- Writes the Google token from the environment without echoing its contents to the log.
+- Restores and saves `processed_ids.json` through the Actions cache. The cache is best-effort state: if it is absent or evicted, messages still within the configured age window may be processed again.
+- Serializes runs on the same ref to avoid concurrent updates to the processed-ID cache.

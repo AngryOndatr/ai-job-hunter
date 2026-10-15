@@ -126,6 +126,10 @@ python main.py
 
 The orchestrator processes up to `limits.max_jobs_per_run` messages per run. It only creates a draft when the job data contains an explicit `application_email` or `recipient`; job alerts without an application address are recorded as skipped. Errors before draft creation leave the Gmail message eligible for retry. If Telegram fails after a draft is created, the report includes the draft link and the message is not reprocessed into a duplicate draft.
 
+### Scheduled GitHub Actions runs
+
+`.github/workflows/run_agent.yml` runs daily at 08:00 UTC and supports manual runs from the repository's **Actions** tab. Configure the `GEMINI_API_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, and `GOOGLE_TOKEN_JSON` repository secrets first. The workflow restores and saves `processed_ids.json` through the Actions cache so scheduled runs can retain Gmail deduplication state; a cold or evicted cache can cause recent messages to be processed again.
+
 ---
 
 ## 📝 License
