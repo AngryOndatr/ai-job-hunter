@@ -32,3 +32,30 @@ This document outlines the step-by-step roadmap for implementing the **AI Job Hu
 - [x] **Task #12:** Implement `main.py` pipeline orchestrator connecting all modules.
 - [x] **Task #13:** Configure GitHub Actions workflow (`.github/workflows/run_agent.yml`) with automated cron triggers and secret injection.
 - [ ] **Task #14:** End-to-end dry run and verification in the hybrid environment (local dry-run mode implemented; live verification pending credentials/API access).
+
+## 🛡️ Phase 7: Production Readiness
+
+Prepare the pipeline for reliable, secure, and observable operation before enabling unattended scheduled runs. Keep human review as the final step: the system may create application drafts but must never send them.
+
+- [ ] **Phase 7.1 (#22):** Add automated CI quality gates for pull requests.
+  - CI workflow and local test instructions are implemented; first GitHub Actions run is pending push/PR.
+  - Run the unit test suite on the supported Python version for pushes and pull requests.
+  - Fail the workflow on test errors and document the local verification command.
+- [ ] **Phase 7.2 (#21):** Make dry-run execution independent of write-only integrations.
+  - Run ingestion and analysis without requiring Telegram credentials or initializing draft/notification clients.
+  - Keep dry-run output useful while excluding unnecessary personal data and preserving processed-message state.
+- [ ] **Phase 7.3 (#20):** Replace best-effort cached processing state with durable, duplicate-safe processing.
+  - Preserve processing state across GitHub runner/cache eviction and deploys.
+  - Define recovery behavior for failures between document creation, draft creation, and state persistence; retries must not silently create duplicate application drafts.
+- [ ] **Phase 7.4 (#19):** Validate configuration and runtime secrets before processing.
+  - Validate required fields, types, ranges, OAuth scopes, and secrets with actionable errors before scanning messages.
+  - Ensure logs and failure reports never expose credentials or full job/resume content.
+- [ ] **Phase 7.5 (#18):** Harden AI input handling and generated application content.
+  - Treat email content as untrusted input, constrain prompt-injection influence, and require resume claims to be supported by the master profile.
+  - Add tests for malicious instructions, malformed model output, and unsupported claims.
+- [ ] **Phase 7.6 (#17):** Add production diagnostics and an operator runbook.
+  - Produce actionable per-run and per-job status, document retry/incident procedures, and make scheduled-run failures visible.
+  - Record enough information to troubleshoot without logging sensitive content.
+- [ ] **Phase 7.7 (#16):** Complete controlled live verification and pilot.
+  - Verify dry-run against the configured Google/Gemini accounts, then run a small capped live pilot that creates drafts only.
+  - Confirm generated documents, Gmail drafts, processed-state recovery, Telegram alerts, and that no email is sent; record results and rollback steps.

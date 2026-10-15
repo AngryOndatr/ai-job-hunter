@@ -130,6 +130,14 @@ python main.py --dry-run
 ```
 The JSON report lists eligible applications under `would_create_drafts`. Dry runs still read Gmail and call Gemini, so they require valid Google credentials and `GEMINI_API_KEY`.
 
+### Run automated tests
+
+Run the unit test suite locally from the repository root:
+```bash
+python -m unittest discover -s tests -v
+```
+GitHub Actions runs the same command on pushes and pull requests using Python 3.11. The test workflow needs no Google, Gemini, or Telegram secrets.
+
 The orchestrator processes up to `limits.max_jobs_per_run` messages per run. It only creates a draft when the job data contains an explicit `application_email` or `recipient`; job alerts without an application address are recorded as skipped. Errors before draft creation leave the Gmail message eligible for retry. If Telegram fails after a draft is created, the report includes the draft link and the message is not reprocessed into a duplicate draft.
 
 ### Scheduled GitHub Actions runs
