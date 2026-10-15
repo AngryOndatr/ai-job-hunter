@@ -92,7 +92,10 @@ class ConfigValidationTests(unittest.TestCase):
                 preflight_google_oauth(self.config)
 
         credentials.has_scopes.assert_called_once_with(SCOPES)
-        self.assertIn("required Gmail, Drive, or Docs scopes", str(caught.exception))
+        self.assertIn(
+            "required Gmail compose, Gmail read, Drive, or Docs scopes",
+            str(caught.exception),
+        )
 
     def test_document_only_preflight_does_not_require_gmail_compose_scope(self):
         credentials = Mock()

@@ -1,6 +1,7 @@
 """Orchestrate the end-to-end job application preparation pipeline."""
 
 import argparse
+import hashlib
 import json
 import os
 import sys
@@ -24,10 +25,6 @@ from config_validation import (
     validate_required_secrets,
 )
 from telegram_notifier import TelegramNotifier
-
-
-class DocumentOnlyOutputPendingError(RuntimeError):
-    """Raised until the follow-up document-only Drive output is implemented."""
 
 
 def run_pipeline(
@@ -88,6 +85,7 @@ def run_pipeline(
         "fetched": len(collected_jobs),
         "attempted": len(batch),
         "drafts_created": 0,
+        "document_applications_created": 0,
         "notifications_sent": 0,
         "dry_run": dry_run,
         "would_create_drafts": [],
@@ -197,9 +195,32 @@ def run_pipeline(
 
             if not recipient:
                 stage = "document_only_application"
-                raise DocumentOnlyOutputPendingError(
-                    "Drive output for jobs without an application email is not implemented yet."
+                drive_key = "ai-job-hunter-" + hashlib.sha256(
+                    message_id.encode("utf-8")
+                ).hexdigest()
+                state_store.mark_status(
+                    message_id, "resume_pending", resume_idempotency_key=drive_key
                 )
+                application_documents = drive_manager.create_document_only_application(
+                    job,
+                    title,
+                    tailored_sections,
+                    cover_letter,
+                    idempotency_key=drive_key,
+                )
+                state_store.mark_status(
+                    message_id,
+                    "resume_created",
+                    resume_document_id=str(
+                        ((application_documents.get("resume") or {}).get("document") or {}).get("id", "")
+                    ),
+                    resume_pdf_id=str(
+                        ((application_documents.get("resume") or {}).get("pdf") or {}).get("id", "")
+                    ),
+                    resume_idempotency_key=drive_key,
+                )
+                report["document_applications_created"] += 1
+                continue
 
             idempotency_key = draft_executor.idempotency_message_id(message_id)
             drive_key = idempotency_key.strip("<>").split("@", 1)[0]
@@ -277,6 +298,7 @@ def _finalize_report(report: dict[str, Any], started_clock: float) -> dict[str, 
         "fetched": report["fetched"],
         "attempted": report["attempted"],
         "drafts_created": report["drafts_created"],
+        "document_applications_created": report["document_applications_created"],
         "notifications_sent": report["notifications_sent"],
         "skipped": len(report["skipped"]),
         "errors": len(report["errors"]),
@@ -320,7 +342,6 @@ def _error_record(
         "GmailDraftError",
         "TelegramNotificationError",
         "ProcessingStateError",
-        "DocumentOnlyOutputPendingError",
     }
     detail = (
         str(error)
@@ -398,6 +419,7 @@ def _write_github_summary(report: Mapping[str, Any]) -> None:
         f"- **Duration:** {report.get('duration_seconds', 'unavailable')} seconds",
         f"- **Fetched / attempted:** {counts.get('fetched', 0)} / {counts.get('attempted', 0)}",
         f"- **Drafts created:** {counts.get('drafts_created', 0)}",
+        f"- **Document-only applications:** {counts.get('document_applications_created', 0)}",
         f"- **Notifications sent:** {counts.get('notifications_sent', 0)}",
         f"- **Skipped / errors:** {counts.get('skipped', 0)} / {counts.get('errors', 0)}",
     ]

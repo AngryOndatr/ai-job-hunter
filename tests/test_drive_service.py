@@ -270,6 +270,71 @@ class GoogleDriveManagerTests(unittest.TestCase):
 
         self.assertEqual(result, "Java_Platform_ Engineer_")
 
+    def test_company_folder_lookup_reuses_existing_folder(self):
+        self.drive.files.return_value.list.return_value.execute.return_value = {
+            "files": [{"id": "company-folder-id", "name": "Example GmbH"}]
+        }
+
+        folder_id = self.manager.get_or_create_company_folder(
+            {"company": "Example GmbH"}
+        )
+
+        self.assertEqual(folder_id, "company-folder-id")
+        self.drive.files.return_value.create.assert_not_called()
+
+    def test_company_folder_name_is_sanitized_and_has_deterministic_fallback(self):
+        self.assertEqual(
+            self.manager._company_folder_name({"company": "../Acme/\x00 GmbH"}),
+            "_Acme__ GmbH",
+        )
+        self.assertEqual(
+            self.manager._company_folder_name({"company": " /\\:*?\"<>| "}),
+            "Unknown Company",
+        )
+
+    def test_document_only_application_creates_both_docs_and_pdf_exports(self):
+        self.drive.files.return_value.list.return_value.execute.return_value = {"files": []}
+        self.drive.files.return_value.create.return_value.execute.side_effect = [
+            {"id": "company-folder-id", "name": "Example GmbH"},
+            {"id": "cover-doc-id", "name": "Engineer - Cover Letter"},
+            {"id": "cover-pdf-id", "name": "Engineer - Cover Letter.pdf"},
+        ]
+        self.drive.files.return_value.copy.return_value.execute.return_value = {
+            **self.document,
+            "id": "resume-doc-id",
+        }
+        self.drive.files.return_value.export.return_value.execute.side_effect = [
+            self.pdf_bytes, self.pdf_bytes
+        ]
+        self.drive.files.return_value.create.return_value.execute.side_effect = [
+            {"id": "company-folder-id", "name": "Example GmbH"},
+            {"id": "resume-pdf-id", "name": "Engineer - Tailored Resume.pdf"},
+            {"id": "cover-doc-id", "name": "Engineer - Cover Letter"},
+            {"id": "cover-pdf-id", "name": "Engineer - Cover Letter.pdf"},
+        ]
+
+        result = self.manager.create_document_only_application(
+            {"company": "Example GmbH"},
+            "Engineer",
+            {"SUMMARY": "Tailored summary"},
+            "Dear Hiring Team,\nPlease consider my application.",
+            idempotency_key="stable-key",
+        )
+
+        self.assertEqual(result["folder"]["id"], "company-folder-id")
+        self.assertEqual(result["resume"]["document"]["id"], "resume-doc-id")
+        self.assertEqual(result["resume"]["pdf"]["id"], "resume-pdf-id")
+        self.assertEqual(result["cover_letter"]["document"]["id"], "cover-doc-id")
+        self.assertEqual(result["cover_letter"]["pdf"]["id"], "cover-pdf-id")
+        self.assertEqual(self.drive.files.return_value.export.call_count, 2)
+        self.docs.documents.return_value.batchUpdate.assert_any_call(
+            documentId="cover-doc-id",
+            body={"requests": [{"insertText": {
+                "location": {"index": 1},
+                "text": "Dear Hiring Team,\nPlease consider my application.",
+            }}]},
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

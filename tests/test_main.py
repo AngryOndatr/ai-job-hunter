@@ -214,7 +214,7 @@ class PipelineTests(unittest.TestCase):
             [{"job_id": "gmail-message-1", "title": "Senior Java Engineer"}],
         )
 
-    def test_missing_recipient_is_retryable_and_not_marked_skipped_or_processed(self):
+    def test_missing_recipient_creates_document_only_application_without_marking_processed(self):
         second_job = {**self.job, "id": "gmail-message-2", "application_email": ""}
         self.collector.fetch_new_job_emails.return_value = [self.job, second_job]
         self.analyzer.analyze_job.side_effect = [
@@ -225,6 +225,7 @@ class PipelineTests(unittest.TestCase):
         report = self.run_with_components()
 
         self.assertEqual(report["drafts_created"], 0)
+        self.assertEqual(report["document_applications_created"], 1)
         self.assertEqual(
             [entry["reason"] for entry in report["skipped"]],
             ["below_match_threshold"],
@@ -233,8 +234,8 @@ class PipelineTests(unittest.TestCase):
             self.collector.mark_processed.call_args_list,
             [unittest.mock.call("gmail-message-1")],
         )
-        self.assertEqual(report["errors"][0]["stage"], "document_only_application")
-        self.assertEqual(report["errors"][0]["job_id"], "gmail-message-2")
+        self.assertEqual(report["errors"], [])
+        self.drive.create_document_only_application.assert_called_once()
         self.state_store.mark_status.assert_any_call("gmail-message-2", "processing")
         self.assertNotIn(
             unittest.mock.call(
@@ -258,7 +259,8 @@ class PipelineTests(unittest.TestCase):
             )
 
         draft_factory.assert_not_called()
-        self.assertEqual(report["errors"][0]["stage"], "document_only_application")
+        self.assertEqual(report["errors"], [])
+        self.drive.create_document_only_application.assert_called_once()
 
     def test_continues_after_a_job_failure_and_retries_failed_job_next_run(self):
         second_job = {**self.job, "id": "gmail-message-2", "subject": "Backend Engineer"}
@@ -324,9 +326,10 @@ class PipelineTests(unittest.TestCase):
 
     def test_missing_secrets_fail_before_gmail_collector_is_initialized(self):
         with patch.dict("os.environ", {}, clear=True):
-            with patch("main.GmailJobCollector") as collector_factory:
-                with self.assertRaisesRegex(ValueError, "GEMINI_API_KEY"):
-                    run_pipeline(config_path=str(self.config_path))
+            with patch("main.load_dotenv"), patch("config_validation.load_dotenv"):
+                with patch("main.GmailJobCollector") as collector_factory:
+                    with self.assertRaisesRegex(ValueError, "GEMINI_API_KEY"):
+                        run_pipeline(config_path=str(self.config_path))
 
         collector_factory.assert_not_called()
 

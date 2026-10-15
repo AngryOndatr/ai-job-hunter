@@ -140,6 +140,8 @@ python main.py --dry-run
 ```
 The JSON report lists email-based applications under `would_create_drafts` and document-only applications under `would_create_documents`, without including recipient addresses. Dry runs read Gmail and the two configured Google Docs and call Gemini, so they require valid Google OAuth credentials and `GEMINI_API_KEY`; Telegram secrets and Gmail compose access are not required.
 
+Eligible jobs without an application email are prepared without creating a Gmail draft. The tailored resume and cover letter are saved as Google Docs and PDFs under `Output Folder/<Company Name>`; unsafe company-name characters are replaced, and missing company names use `Unknown Company`. The run summary counts completed document-only applications separately from Gmail drafts.
+
 ### Run automated tests
 
 Run the unit test suite locally from the repository root:

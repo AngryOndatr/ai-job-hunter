@@ -47,7 +47,8 @@ The system reads processing settings from `config.yaml`:
 
 - Candidate facts are read from `google_docs.master_profile_doc_id`. The generated resume is copied from the separate `google_docs.resume_template_doc_id`, which must contain one or more double-brace placeholders such as `{{SUMMARY}}` or `{{EXPERIENCE}}`. The IDs must be different; profile-only content is never copied into the output document.
 - A job is eligible only when its match score meets `ai_policy.min_match_score_to_draft`.
-- A Gmail draft requires an explicit `application_email` or `recipient` value in the job mapping. The job alert's `sender` is never treated as the application address. Jobs without a recipient are reported as skipped.
+- A Gmail draft requires an explicit `application_email` or `recipient` value in the job mapping. The job alert's `sender` is never treated as the application address. Eligible jobs without a recipient are routed to document-only preparation.
+- Eligible jobs without an application recipient receive a tailored resume and cover letter as Google Docs and PDF files inside `Output Folder/<Company Name>`. Company folder names are sanitized; missing company names use `Unknown Company`.
 - Jobs that fail before draft creation are not marked processed and can be retried. After a draft is created, the message ID is persisted before Telegram notification to avoid creating duplicate drafts if Telegram is unavailable; the run report includes the draft URL when notification fails.
 - `main.py` prints a JSON run report and exits with a non-zero status if any job or notification failed.
 - Run reports include a run ID, UTC timestamps, duration, outcome, aggregate counts, and stage-level job errors. GitHub Actions writes a compact step summary; unexpected startup error details are redacted. See `RUNBOOK.md` for triage and recovery guidance.

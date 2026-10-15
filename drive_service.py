@@ -83,6 +83,7 @@ class GoogleDriveManager:
         output_name: str | None = None,
         *,
         idempotency_key: str | None = None,
+        output_folder_id: str | None = None,
     ) -> dict[str, Any]:
         """Create a tailored Google Doc and PDF in the configured Drive folder.
 
@@ -94,16 +95,17 @@ class GoogleDriveManager:
         replacements = self._normalize_replacements(tailored_sections)
         base_name = self._safe_file_name(output_name or f"{job_title} - Tailored Resume")
 
+        output_folder_id = output_folder_id or self.output_folder_id
         document = None
         pdf_file = None
         document_created = False
         pdf_created = False
         try:
             if idempotency_key:
-                document = self._find_idempotent_file(idempotency_key, "document")
+                document = self._find_idempotent_file(idempotency_key, "document", output_folder_id)
             document_reused = bool(document)
             if not document:
-                copy_body = {"name": base_name, "parents": [self.output_folder_id]}
+                copy_body = {"name": base_name, "parents": [output_folder_id]}
                 if idempotency_key:
                     copy_body["appProperties"] = {
                         "aiJobHunterKey": idempotency_key,
@@ -174,7 +176,7 @@ class GoogleDriveManager:
                 io.BytesIO(pdf_bytes), mimetype="application/pdf", resumable=False
             )
             if idempotency_key:
-                pdf_file = self._find_idempotent_file(idempotency_key, "pdf")
+                pdf_file = self._find_idempotent_file(idempotency_key, "pdf", output_folder_id)
             if pdf_file:
                 pdf_file = self.drive.files().update(
                     fileId=pdf_file["id"], media_body=media,
@@ -184,7 +186,7 @@ class GoogleDriveManager:
                 pdf_body = {
                     "name": pdf_name,
                     "mimeType": "application/pdf",
-                    "parents": [self.output_folder_id],
+                    "parents": [output_folder_id],
                 }
                 if idempotency_key:
                     pdf_body["appProperties"] = {
@@ -212,14 +214,17 @@ class GoogleDriveManager:
             if isinstance(exc, GoogleDriveServiceError):
                 raise
             raise GoogleDriveServiceError(
-                f"Failed to create the tailored resume for {job_title!r}."
+                "Failed to create the tailored resume in Google Drive."
             ) from exc
 
-    def _find_idempotent_file(self, idempotency_key: str, artifact: str) -> dict[str, Any] | None:
+    def _find_idempotent_file(
+        self, idempotency_key: str, artifact: str, folder_id: str | None = None
+    ) -> dict[str, Any] | None:
+        folder_id = folder_id or self.output_folder_id
         escaped_key = idempotency_key.replace("\\", "\\\\").replace("'", "\\'")
         response = self.drive.files().list(
             q=(
-                f"'{self.output_folder_id}' in parents and trashed = false and "
+                f"'{folder_id}' in parents and trashed = false and "
                 "appProperties has { "
                 f"key='aiJobHunterKey' and value='{escaped_key}' }} and "
                 "appProperties has { "
@@ -236,6 +241,154 @@ class GoogleDriveManager:
                 f"Multiple Drive {artifact} artifacts exist for the same source message."
             )
         return files[0] if files else None
+
+    def create_document_only_application(
+        self,
+        job: Mapping[str, Any],
+        job_title: str,
+        tailored_sections: Mapping[str, str],
+        cover_letter: str,
+        *,
+        idempotency_key: str,
+    ) -> dict[str, Any]:
+        """Save tailored resume and cover letter Docs/PDFs under the company folder."""
+        if not isinstance(cover_letter, str) or not cover_letter.strip():
+            raise ValueError("cover_letter must be non-empty text.")
+        folder_id = self.get_or_create_company_folder(job)
+        resume = self.create_tailored_resume(
+            job_title,
+            tailored_sections,
+            output_name=f"{job_title} - Tailored Resume",
+            idempotency_key=f"{idempotency_key}-resume",
+            output_folder_id=folder_id,
+        )
+        cover = self._create_cover_letter(
+            job_title, cover_letter, folder_id,
+            idempotency_key=f"{idempotency_key}-cover-letter",
+        )
+        return {"folder": {"id": folder_id}, "resume": resume, "cover_letter": cover}
+
+    def get_or_create_company_folder(self, job: Mapping[str, Any]) -> str:
+        """Find or create a safely named company folder beneath the output folder."""
+        name = self._company_folder_name(job)
+        escaped_name = name.replace("\\", "\\\\").replace("'", "\\'")
+        response = self.drive.files().list(
+            q=(
+                f"'{self.output_folder_id}' in parents and name = '{escaped_name}' "
+                "and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
+            ),
+            pageSize=10,
+            fields="files(id,name)",
+            supportsAllDrives=True,
+            includeItemsFromAllDrives=True,
+        ).execute()
+        folders = response.get("files", [])
+        if len(folders) > 1:
+            raise GoogleDriveServiceError("Multiple company folders have the same name.")
+        if folders:
+            return folders[0]["id"]
+        folder = self.drive.files().create(
+            body={
+                "name": name,
+                "mimeType": "application/vnd.google-apps.folder",
+                "parents": [self.output_folder_id],
+            },
+            fields="id,name",
+            supportsAllDrives=True,
+        ).execute()
+        if not folder.get("id"):
+            raise GoogleDriveServiceError("Google Drive created a company folder without an ID.")
+        return folder["id"]
+
+    @classmethod
+    def _company_folder_name(cls, job: Mapping[str, Any]) -> str:
+        raw_name = job.get("company") or job.get("employer")
+        if not isinstance(raw_name, str) or not raw_name.strip():
+            raw_name = "Unknown Company"
+        safe_name = re.sub(r'[\\/:*?"<>|\x00-\x1f]', "_", raw_name).strip(" .")
+        safe_name = re.sub(r"\s+", " ", safe_name)[:100].strip(" .")
+        return safe_name if safe_name.strip("_") else "Unknown Company"
+
+    def _create_cover_letter(
+        self,
+        job_title: str,
+        text: str,
+        folder_id: str,
+        *,
+        idempotency_key: str,
+    ) -> dict[str, Any]:
+        """Create/reuse a cover-letter Google Doc and exported PDF."""
+        doc = self._find_idempotent_file(idempotency_key, "cover-letter-document", folder_id)
+        created_doc = False
+        created_pdf = False
+        pdf = None
+        try:
+            if not doc:
+                doc = self.drive.files().create(
+                    body={
+                        "name": self._safe_file_name(f"{job_title} - Cover Letter"),
+                        "mimeType": "application/vnd.google-apps.document",
+                        "parents": [folder_id],
+                        "appProperties": {
+                            "aiJobHunterKey": idempotency_key,
+                            "aiJobHunterArtifact": "cover-letter-document",
+                        },
+                    },
+                    fields="id,name,mimeType,webViewLink,appProperties",
+                    supportsAllDrives=True,
+                ).execute()
+                created_doc = True
+                self.docs.documents().batchUpdate(
+                    documentId=doc["id"],
+                    body={
+                        "requests": [
+                            {"insertText": {"location": {"index": 1}, "text": text}}
+                        ]
+                    },
+                ).execute()
+            pdf_bytes = self.drive.files().export(
+                fileId=doc["id"], mimeType="application/pdf"
+            ).execute()
+            if not isinstance(pdf_bytes, bytes) or not pdf_bytes.startswith(b"%PDF"):
+                raise GoogleDriveServiceError(
+                    "Google Drive returned invalid cover-letter PDF data."
+                )
+            pdf_key = f"{idempotency_key}-pdf"
+            pdf = self._find_idempotent_file(pdf_key, "cover-letter-pdf", folder_id)
+            media = MediaIoBaseUpload(
+                io.BytesIO(pdf_bytes), mimetype="application/pdf", resumable=False
+            )
+            if pdf:
+                pdf = self.drive.files().update(
+                    fileId=pdf["id"], media_body=media,
+                    fields="id,name,mimeType,webViewLink,size", supportsAllDrives=True,
+                ).execute()
+            else:
+                pdf = self.drive.files().create(
+                    body={
+                        "name": self._safe_file_name(f"{job_title} - Cover Letter.pdf"),
+                        "mimeType": "application/pdf", "parents": [folder_id],
+                        "appProperties": {
+                            "aiJobHunterKey": pdf_key,
+                            "aiJobHunterArtifact": "cover-letter-pdf",
+                        },
+                    },
+                    media_body=media,
+                    fields="id,name,mimeType,webViewLink,size,appProperties",
+                    supportsAllDrives=True,
+                ).execute()
+                created_pdf = True
+            return {"document": doc, "pdf": pdf, "pdf_bytes": pdf_bytes}
+        except Exception as exc:
+            if created_pdf:
+                self._trash_if_created(pdf)
+            if created_doc:
+                self._trash_if_created(doc)
+            if isinstance(exc, GoogleDriveServiceError):
+                raise
+            raise GoogleDriveServiceError(
+                "Failed to create the cover letter in Google Drive."
+            ) from exc
 
     def load_master_profile(self) -> str:
         """Read factual candidate information from the master profile document."""
