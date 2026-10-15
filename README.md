@@ -132,7 +132,7 @@ To verify ingestion and AI analysis without creating Google Docs, Gmail drafts, 
 ```bash
 python main.py --dry-run
 ```
-The JSON report lists eligible applications under `would_create_drafts`. Dry runs still read Gmail and call Gemini, so they require valid Google credentials and `GEMINI_API_KEY`.
+The JSON report lists eligible applications under `would_create_drafts` without including recipient addresses. Dry runs read Gmail and the two configured Google Docs and call Gemini, so they require valid Google OAuth credentials and `GEMINI_API_KEY`; Telegram secrets are not required.
 
 ### Run automated tests
 

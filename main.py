@@ -54,8 +54,9 @@ def run_pipeline(
 
     analyzer = analyzer or GeminiJobAnalyzer(config_path=config_path)
     drive_manager = drive_manager or GoogleDriveManager(config_path=config_path)
-    draft_executor = draft_executor or GmailDraftExecutor(config_path=config_path)
-    notifier = notifier or TelegramNotifier()
+    if not dry_run:
+        draft_executor = draft_executor or GmailDraftExecutor(config_path=config_path)
+        notifier = notifier or TelegramNotifier()
 
     master_profile = drive_manager.load_master_profile()
     template = drive_manager.load_resume_template()
@@ -76,7 +77,8 @@ def run_pipeline(
 
             analysis = analyzer.analyze_job(job, master_profile)
             if not analysis.get("eligible_for_draft"):
-                collector.mark_processed(message_id)
+                if not dry_run:
+                    collector.mark_processed(message_id)
                 report["skipped"].append(
                     {"job_id": message_id, "title": title, "reason": "below_match_threshold"}
                 )
@@ -84,7 +86,8 @@ def run_pipeline(
 
             recipient = job.get("application_email") or job.get("recipient")
             if not recipient:
-                collector.mark_processed(message_id)
+                if not dry_run:
+                    collector.mark_processed(message_id)
                 report["skipped"].append(
                     {"job_id": message_id, "title": title, "reason": "missing_application_recipient"}
                 )
@@ -98,7 +101,7 @@ def run_pipeline(
 
             if dry_run:
                 report["would_create_drafts"].append(
-                    {"job_id": message_id, "title": title, "recipient": recipient}
+                    {"job_id": message_id, "title": title}
                 )
                 continue
 

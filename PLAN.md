@@ -42,6 +42,7 @@ Prepare the pipeline for reliable, secure, and observable operation before enabl
   - Run the unit test suite on the supported Python version for pushes and pull requests.
   - Fail the workflow on test errors and document the local verification command.
 - [ ] **Phase 7.2 (#21):** Make dry-run execution independent of write-only integrations.
+  - Dry-run skips draft/Telegram client initialization, leaves all processed IDs unchanged, and omits recipient addresses; automated coverage added.
   - Run ingestion and analysis without requiring Telegram credentials or initializing draft/notification clients.
   - Keep dry-run output useful while excluding unnecessary personal data and preserving processed-message state.
 - [ ] **Phase 7.3 (#20):** Replace best-effort cached processing state with durable, duplicate-safe processing.
