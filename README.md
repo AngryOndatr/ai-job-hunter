@@ -1,6 +1,6 @@
 # 🤖 AI Job Hunter
 
-**AI Job Hunter** is an autonomous multi-agent pipeline built with Python to streamline and automate the job application process. The agent scans incoming job notifications in Gmail, evaluates role compatibility using Google Gemini `gemini-3.8-flash`, tailors key resume sections for Applicant Tracking Systems (ATS), dynamically generates updated PDF resumes via the Google Docs API, creates ready-to-send Gmail drafts, and dispatches real-time push alerts to Telegram.
+**AI Job Hunter** is an autonomous multi-agent pipeline built with Python to streamline and automate the job application process. The agent scans incoming job notifications in Gmail, evaluates role compatibility using Google Gemini `gemini-2.5-flash-lite`, tailors key resume sections for Applicant Tracking Systems (ATS), dynamically generates updated PDF resumes via the Google Docs API, creates ready-to-send Gmail drafts, and dispatches real-time push alerts to Telegram.
 
 The system adheres to a **Human-in-the-Loop** architecture: the agent automates all tedious preparation tasks while reserving final review and submission control for you.
 
@@ -23,7 +23,7 @@ The system adheres to a **Human-in-the-Loop** architecture: the agent automates 
 ## System Architecture Overview
 
 1. **Gmail Ingestion:** Scans targeted folders/labels and filters completed messages using a durable processing manifest in the configured Google Drive output folder.
-2. **AI Job Analysis:** Google Gemini `gemini-3.8-flash` compares job requirements with the factual master profile and applies the configured match threshold.
+2. **AI Job Analysis:** Google Gemini `gemini-2.5-flash-lite` compares job requirements with the factual master profile and applies the configured match threshold.
 3. **Document Generation:** Gemini tailors the resume template's `{{PLACEHOLDER}}` sections using profile evidence. The pipeline clones the separate template Google Doc, updates those sections, and exports a PDF.
 4. **Gmail Execution:** Creates a draft email in Gmail containing the cover letter and attached PDF resume.
 5. **Notification:** Sends an immediate digest alert with direct links via Telegram Bot.
