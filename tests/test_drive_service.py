@@ -59,6 +59,50 @@ class GoogleDriveManagerTests(unittest.TestCase):
             docs_service=self.docs,
         )
 
+    def test_loads_master_profile_and_discovers_placeholders_in_document_content(self):
+        self.docs.documents.return_value.get.return_value.execute.return_value = {
+            "body": {
+                "content": [
+                    {
+                        "paragraph": {
+                            "elements": [
+                                {"textRun": {"content": "Profile text\n{{SUMMARY}}\n"}},
+                            ]
+                        }
+                    },
+                    {
+                        "table": {
+                            "tableRows": [
+                                {
+                                    "tableCells": [
+                                        {
+                                            "content": [
+                                                {
+                                                    "paragraph": {
+                                                        "elements": [
+                                                            {"textRun": {"content": "{{EXPERIENCE}}\n"}}
+                                                        ]
+                                                    }
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    },
+                ]
+            }
+        }
+
+        result = self.manager.load_master_resume_profile()
+
+        self.assertIn("Profile text", result["text"])
+        self.assertEqual(result["placeholders"], ["{{SUMMARY}}", "{{EXPERIENCE}}"])
+        self.docs.documents.return_value.get.assert_called_once_with(
+            documentId="template-id"
+        )
+
     def test_copies_replaces_exports_and_saves_pdf(self):
         result = self.manager.create_tailored_resume(
             "Senior Java Engineer",

@@ -154,6 +154,58 @@ class GeminiJobAnalyzerTests(unittest.TestCase):
                 "Java developer role", "Java developer profile", []
             )
 
+    def test_generates_content_for_requested_resume_placeholders(self):
+        self.response.text = json.dumps(
+            {
+                "sections": [
+                    {"placeholder": "{{SUMMARY}}", "content": "Java engineer with Spring experience."},
+                    {"placeholder": "{{EXPERIENCE}}", "content": "Built Spring Boot services."},
+                ]
+            }
+        )
+
+        result = self.analyzer.generate_tailored_sections(
+            "Java Engineer role",
+            "Java engineer with Spring Boot experience.",
+            {"match_score": 85, "matching_skills": ["Java"], "missing_keywords": []},
+            ["{{SUMMARY}}", "{{EXPERIENCE}}"],
+        )
+
+        self.assertEqual(
+            result,
+            {
+                "{{SUMMARY}}": "Java engineer with Spring experience.",
+                "{{EXPERIENCE}}": "Built Spring Boot services.",
+            },
+        )
+        call = self.client.models.generate_content.call_args.kwargs
+        self.assertIn("Do not invent experience", call["contents"])
+        self.assertIn("{{SUMMARY}}", call["contents"])
+
+    def test_rejects_missing_or_unrequested_tailored_placeholders(self):
+        self.response.text = json.dumps(
+            {"sections": [{"placeholder": "{{SUMMARY}}", "content": "Java engineer."}]}
+        )
+
+        with self.assertRaisesRegex(GeminiAnalysisError, "all requested"):
+            self.analyzer.generate_tailored_sections(
+                "Java Engineer role",
+                "Java engineer profile",
+                {"match_score": 85},
+                ["{{SUMMARY}}", "{{EXPERIENCE}}"],
+            )
+
+        self.response.text = json.dumps(
+            {"sections": [{"placeholder": "{{OTHER}}", "content": "Java engineer."}]}
+        )
+        with self.assertRaisesRegex(GeminiAnalysisError, "unrequested"):
+            self.analyzer.generate_tailored_sections(
+                "Java Engineer role",
+                "Java engineer profile",
+                {"match_score": 85},
+                ["{{SUMMARY}}"],
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

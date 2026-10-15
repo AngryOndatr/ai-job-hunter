@@ -1,38 +1,35 @@
 # 🤖 AI Job Hunter
 
-AI Job Hunter is an autonomous multi-agent Python system designed to automate the job search and application pipeline. The agent scans incoming job alert emails in specific Gmail folders (Glassdoor, LinkedIn, Michael Page, Stepstone.de), analyzes requirements using Google Gemini `gemini-3.8-flash`, matches them against your master resume, adapts key resume sections for ATS optimization, generates a PDF via Google Docs API, creates a draft email with the attachment in Gmail, and sends a notification to Telegram.
+AI Job Hunter prepares job applications through a Python pipeline. `main.py` connects Gmail ingestion, Google Gemini analysis and resume tailoring, Google Docs/PDF generation, Gmail draft creation, and Telegram notifications. It creates drafts for human review and never sends application emails.
 
 The system operates on a **Human-in-the-Loop** model: the agent automates all tedious preparation tasks while leaving final review and email dispatch to you.
 
 ## 📐 System Architecture
 
-```text
-┌──────────────┐     ┌─────────────────────┐     ┌──────────────────────┐
-│  Gmail API   │ --> │ GmailJobCollector   │ --> │  JobAnalyzerAgent    │
-│ (Target      │     │ (Scan Labels &      │     │  (Gemini API)       │
-│  Labels)     │     │  Deduplicate)       │     │                      │
-└──────────────┘     └─────────────────────┘     └──────────────────────┘
-                                                            │
-                                                            ▼
-┌──────────────┐     ┌─────────────────────┐     ┌──────────────────────┐
-│ Telegram Bot │ <-- │  Gmail Executor     │ <-- │ GoogleDriveManager   │
-│(Notification)│     │  (Create Draft)     │     │ (Clone, Tailor, PDF) │
-└──────────────┘     └─────────────────────┘     └──────────────────────┘
-```
+`main.py` orchestrates these steps:
+
+1. `GmailJobCollector` fetches unseen messages from configured Gmail labels.
+2. `GoogleDriveManager` reads the master Google Doc text and discovers its `{{PLACEHOLDER}}` sections.
+3. `GeminiJobAnalyzer` scores each job against the profile and, for eligible jobs, generates tailored resume sections and a cover letter.
+4. `GoogleDriveManager` copies the template, replaces the requested sections, and exports a PDF.
+5. `GmailDraftExecutor` creates a draft with the cover letter and PDF attachment.
+6. `TelegramNotifier` sends the job summary and Gmail draft link.
 
 ## ⚙️ Dynamic Configuration (`config.yaml`)
 
-The system reads scan rules, keyword filters, and AI behavior policies from `config.yaml`:
+The system reads processing settings from `config.yaml`:
 
-- **Gmail target labels:** Glassdoor, LinkedIn, Michael Page, and Stepstone.de.
-- **Keyword filter:** Java, Spring Boot, Full-Stack, Microservices, Angular, and TypeScript.
-- **AI policy:** response language (`en`), minimum match score (`min_match_score_to_draft`), and blacklisted keywords.
+- **Gmail settings:** target labels, maximum message age, and `processed_ids.json` path. During orchestration, IDs are acknowledged after a job is skipped or a draft is created; failures before draft creation remain eligible for retry.
+- **AI policy:** model, response language, and minimum score (`min_match_score_to_draft`).
+- **Google Docs:** master resume document ID and output folder ID.
+- **Run limit:** `limits.max_jobs_per_run` caps jobs attempted in one run.
+- `filters.keywords` and `filters.blacklisted_keywords` are present in the configuration but are not currently applied by `GmailJobCollector` or `main.py`.
 
 ## 🛠️ Platform Responsibilities
 
 1. **Windows — Development and debugging**
    - IDE: IntelliJ IDEA Community Edition with the Python plugin.
-   - Purpose: writing code, local module testing, virtual environment (`venv`) management, and debugging.
+   - Purpose: writing code, running `python main.py`, local module testing, virtual environment (`venv`) management, and debugging.
    - Local files excluded from Git via `.gitignore`: `credentials.json`, `token.json`, `processed_ids.json`, and `.env`.
 2. **Cloud runner — GitHub Actions**
    - Runs `main.py` on a scheduled cron without requiring a local machine to stay powered on.
@@ -40,6 +37,14 @@ The system reads scan rules, keyword filters, and AI behavior policies from `con
 3. **Android — Mobile control center**
    - **Telegram Bot:** sends push notifications with match scores and quick-action links.
    - **Gmail app:** lets you review the draft email and tailored PDF resume before sending.
+
+## Pipeline Behavior
+
+- The master profile is read from the configured Google Doc. The document must contain one or more double-brace placeholders such as `{{SUMMARY}}` or `{{EXPERIENCE}}` for sections to tailor.
+- A job is eligible only when its match score meets `ai_policy.min_match_score_to_draft`.
+- A Gmail draft requires an explicit `application_email` or `recipient` value in the job mapping. The job alert's `sender` is never treated as the application address. Jobs without a recipient are reported as skipped.
+- Jobs that fail before draft creation are not marked processed and can be retried. After a draft is created, the message ID is persisted before Telegram notification to avoid creating duplicate drafts if Telegram is unavailable; the run report includes the draft URL when notification fails.
+- `main.py` prints a JSON run report and exits with a non-zero status if any job or notification failed.
 
 ## 🔑 Required Credentials and Token Acquisition
 
@@ -67,7 +72,7 @@ Configure these secrets under **Settings → Secrets and variables → Actions**
 | `TELEGRAM_CHAT_ID` | Your numerical chat ID | `987654321` |
 | `GOOGLE_TOKEN_JSON` | Full content of your local `token.json` file | `{"token":"...","refresh_token":"..."}` |
 
-## 🚀 GitHub Actions Workflow (`.github/workflows/run_agent.yml`)
+## 🚀 Planned GitHub Actions Workflow (`.github/workflows/run_agent.yml`, Phase 6.2)
 
 ```yaml
 name: AI Job Hunter Cloud Runner

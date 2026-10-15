@@ -23,8 +23,8 @@ The system adheres to a **Human-in-the-Loop** architecture: the agent automates 
 ## System Architecture Overview
 
 1. **Gmail Ingestion:** Scans targeted folders/labels for new job notification emails and filters out duplicates using `processed_ids.json`.
-2. **AI Job Analysis:** Google Gemini `gemini-3.8-flash` compares job requirements with your master resume, generating a match score and cover letter text.
-3. **Document Generation:** Clones your master resume on Google Drive, updates sections using Google Docs API, and exports a tailored PDF.
+2. **AI Job Analysis:** Google Gemini `gemini-3.8-flash` compares job requirements with the profile read from your master resume and applies the configured match threshold.
+3. **Document Generation:** Gemini tailors the template's `{{PLACEHOLDER}}` sections using profile evidence. The pipeline clones the master Google Doc, updates those sections, and exports a PDF.
 4. **Gmail Execution:** Creates a draft email in Gmail containing the cover letter and attached PDF resume.
 5. **Notification:** Sends an immediate digest alert with direct links via Telegram Bot.
 
@@ -123,6 +123,8 @@ Execute the pipeline locally:
 python main.py
 ```
 *Note: On initial execution, a browser window will open requesting Google API authorization. Upon approval, `token.json` will be generated automatically.*
+
+The orchestrator processes up to `limits.max_jobs_per_run` messages per run. It only creates a draft when the job data contains an explicit `application_email` or `recipient`; job alerts without an application address are recorded as skipped. Errors before draft creation leave the Gmail message eligible for retry. If Telegram fails after a draft is created, the report includes the draft link and the message is not reprocessed into a duplicate draft.
 
 ---
 

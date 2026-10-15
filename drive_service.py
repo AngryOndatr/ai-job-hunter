@@ -155,6 +155,60 @@ class GoogleDriveManager:
                 f"Failed to create the tailored resume for {job_title!r}."
             ) from exc
 
+    def load_master_resume_profile(self) -> dict[str, Any]:
+        """Read the master Doc text and discover its double-brace placeholders."""
+        try:
+            document = self.docs.documents().get(documentId=self.template_id).execute()
+        except Exception as exc:
+            raise GoogleDriveServiceError("Failed to read the master resume Google Doc.") from exc
+
+        text = self._extract_document_text(document).strip()
+        placeholders = list(dict.fromkeys(re.findall(r"\{\{\s*[A-Za-z0-9_ -]+\s*\}\}", text)))
+        if not text:
+            raise GoogleDriveServiceError("The master resume Google Doc contains no readable text.")
+        if not placeholders:
+            raise GoogleDriveServiceError(
+                "The master resume Google Doc contains no {{PLACEHOLDER}} sections to tailor."
+            )
+        return {"text": text, "placeholders": placeholders}
+
+    @classmethod
+    def _extract_document_text(cls, document: Mapping[str, Any]) -> str:
+        """Extract text from Google Docs paragraphs, tables, and table of contents."""
+        body = document.get("body") or {}
+        content = body.get("content") or []
+        if not content:
+            tabs = document.get("tabs") or []
+            for tab in tabs:
+                tab_body = (tab.get("documentTab") or {}).get("body") or {}
+                content.extend(tab_body.get("content") or [])
+        return cls._extract_content_text(content)
+
+    @classmethod
+    def _extract_content_text(cls, content: list[Mapping[str, Any]]) -> str:
+        pieces = []
+        for element in content:
+            paragraph = element.get("paragraph")
+            if paragraph:
+                for paragraph_element in paragraph.get("elements") or []:
+                    text_run = paragraph_element.get("textRun") or {}
+                    run_text = text_run.get("content")
+                    if isinstance(run_text, str):
+                        pieces.append(run_text)
+
+            table = element.get("table")
+            if table:
+                for row in table.get("tableRows") or []:
+                    for cell in row.get("tableCells") or []:
+                        pieces.append(cls._extract_content_text(cell.get("content") or []))
+
+            table_of_contents = element.get("tableOfContents")
+            if table_of_contents:
+                pieces.append(
+                    cls._extract_content_text(table_of_contents.get("content") or [])
+                )
+        return "".join(pieces)
+
     @staticmethod
     def _normalize_replacements(tailored_sections: Mapping[str, str]) -> dict[str, str]:
         if not isinstance(tailored_sections, Mapping) or not tailored_sections:

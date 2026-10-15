@@ -41,9 +41,10 @@ class GmailJobCollector:
         with open(self.processed_ids_file, "w", encoding="utf-8") as f:
             json.dump(list(self.processed_ids), f, indent=2)
 
-    def fetch_new_job_emails(self):
+    def fetch_new_job_emails(self, defer_processed=False):
         """Сканирует новые письма по целевым меткам с учетом даты и дедупликации."""
         all_messages = []
+        discovered_ids = set()
         cutoff_date = datetime.now(timezone.utc) - timedelta(days=self.max_age_days)
 
         # Получаем список лейблов в Gmail для сопоставления названий с ID
@@ -68,7 +69,7 @@ class GmailJobCollector:
                 messages = results.get('messages', [])
                 for msg in messages:
                     msg_id = msg['id']
-                    if msg_id in self.processed_ids:
+                    if msg_id in self.processed_ids or msg_id in discovered_ids:
                         continue
 
                     # Получаем детали письма
@@ -79,13 +80,23 @@ class GmailJobCollector:
                     parsed_email = self._parse_message(msg_detail, label_name)
                     if parsed_email:
                         all_messages.append(parsed_email)
-                        self.processed_ids.add(msg_id)
+                        discovered_ids.add(msg_id)
+                        if not defer_processed:
+                            self.processed_ids.add(msg_id)
 
             except Exception as e:
                 print(f"❌ Ошибка при сканировании метки {label_name}: {e}")
 
-        self._save_processed_ids()
+        if not defer_processed:
+            self._save_processed_ids()
         return all_messages
+
+    def mark_processed(self, message_id):
+        """Persist one message ID after the downstream pipeline has handled it."""
+        if not isinstance(message_id, str) or not message_id:
+            raise ValueError("message_id must be a non-empty string.")
+        self.processed_ids.add(message_id)
+        self._save_processed_ids()
 
     def _parse_message(self, msg_detail, source_label):
         headers = msg_detail.get('payload', {}).get('headers', [])
