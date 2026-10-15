@@ -45,6 +45,7 @@ The system reads processing settings from `config.yaml`:
 - A Gmail draft requires an explicit `application_email` or `recipient` value in the job mapping. The job alert's `sender` is never treated as the application address. Jobs without a recipient are reported as skipped.
 - Jobs that fail before draft creation are not marked processed and can be retried. After a draft is created, the message ID is persisted before Telegram notification to avoid creating duplicate drafts if Telegram is unavailable; the run report includes the draft URL when notification fails.
 - `main.py` prints a JSON run report and exits with a non-zero status if any job or notification failed.
+- `python main.py --dry-run` reads Gmail and performs Gemini analysis/content generation but skips Google Doc creation, Gmail drafts, Telegram notifications, and processed-ID updates. The report lists eligible applications in `would_create_drafts`; this mode still needs Google and Gemini credentials.
 
 ## 🔑 Required Credentials and Token Acquisition
 

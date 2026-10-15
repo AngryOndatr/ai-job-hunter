@@ -1,5 +1,6 @@
 """Orchestrate the end-to-end job application preparation pipeline."""
 
+import argparse
 import json
 from collections.abc import Mapping
 from typing import Any
@@ -21,6 +22,7 @@ def run_pipeline(
     drive_manager: Any = None,
     draft_executor: Any = None,
     notifier: Any = None,
+    dry_run: bool = False,
 ) -> dict[str, Any]:
     """Run one batch and return a report; dependencies can be injected for tests."""
     try:
@@ -42,6 +44,8 @@ def run_pipeline(
         "attempted": len(batch),
         "drafts_created": 0,
         "notifications_sent": 0,
+        "dry_run": dry_run,
+        "would_create_drafts": [],
         "skipped": [],
         "errors": [],
     }
@@ -91,6 +95,12 @@ def run_pipeline(
                 job, master_profile, analysis, placeholders
             )
             cover_letter = analyzer.generate_cover_letter(job, master_profile, analysis)
+
+            if dry_run:
+                report["would_create_drafts"].append(
+                    {"job_id": message_id, "title": title, "recipient": recipient}
+                )
+                continue
 
             stage = "resume_document"
             tailored_resume = drive_manager.create_tailored_resume(title, tailored_sections)
@@ -145,7 +155,14 @@ def _error_record(
 
 
 def main() -> int:
-    report = run_pipeline()
+    parser = argparse.ArgumentParser(description="Prepare job application drafts.")
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Run ingestion and AI analysis without creating documents, drafts, or notifications.",
+    )
+    args = parser.parse_args()
+    report = run_pipeline(dry_run=args.dry_run)
     print(json.dumps(report, ensure_ascii=False, indent=2))
     return 1 if report["errors"] else 0
 

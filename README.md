@@ -124,6 +124,12 @@ python main.py
 ```
 *Note: On initial execution, a browser window will open requesting Google API authorization. Upon approval, `token.json` will be generated automatically.*
 
+To verify ingestion and AI analysis without creating Google Docs, Gmail drafts, Telegram notifications, or marking messages as processed, run:
+```bash
+python main.py --dry-run
+```
+The JSON report lists eligible applications under `would_create_drafts`. Dry runs still read Gmail and call Gemini, so they require valid Google credentials and `GEMINI_API_KEY`.
+
 The orchestrator processes up to `limits.max_jobs_per_run` messages per run. It only creates a draft when the job data contains an explicit `application_email` or `recipient`; job alerts without an application address are recorded as skipped. Errors before draft creation leave the Gmail message eligible for retry. If Telegram fails after a draft is created, the report includes the draft link and the message is not reprocessed into a duplicate draft.
 
 ### Scheduled GitHub Actions runs

@@ -97,6 +97,31 @@ class PipelineTests(unittest.TestCase):
             self.draft_executor.create_draft.return_value,
         )
 
+    def test_dry_run_analyzes_and_tailors_without_external_writes_or_acknowledging(self):
+        report = run_pipeline(
+            config_path=str(self.config_path),
+            collector=self.collector,
+            analyzer=self.analyzer,
+            drive_manager=self.drive,
+            draft_executor=self.draft_executor,
+            notifier=self.notifier,
+            dry_run=True,
+        )
+
+        self.assertTrue(report["dry_run"])
+        self.assertEqual(report["drafts_created"], 0)
+        self.assertEqual(report["notifications_sent"], 0)
+        self.assertEqual(
+            report["would_create_drafts"],
+            [{"job_id": "gmail-message-1", "title": "Senior Java Engineer", "recipient": "jobs@example.com"}],
+        )
+        self.analyzer.generate_tailored_sections.assert_called_once()
+        self.analyzer.generate_cover_letter.assert_called_once()
+        self.drive.create_tailored_resume.assert_not_called()
+        self.draft_executor.create_draft.assert_not_called()
+        self.notifier.send_notification.assert_not_called()
+        self.collector.mark_processed.assert_not_called()
+
     def test_marks_below_threshold_and_missing_recipient_jobs_as_skipped(self):
         second_job = {**self.job, "id": "gmail-message-2", "application_email": ""}
         self.collector.fetch_new_job_emails.return_value = [self.job, second_job]
