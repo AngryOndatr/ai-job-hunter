@@ -90,10 +90,12 @@ pip install -r requirements.txt
 2. Enable the **Gmail API**, **Google Drive API** и **Google Docs API**.
 3. Create an **OAuth 2.0 Client ID** (Тип приложения: *Desktop App* / *Рабочий стол*).
 4. Download the JSON credential file, rename it to `credentials.json`, and place it in the root directory.
-5. При первом использовании Google APIs пройдите авторизацию в браузере. Приложение запрашивает Gmail read-only, Google Drive и Google Docs scopes. Если `token.json` был создан до добавления Drive/Docs scopes, повторная авторизация запустится автоматически.
+5. При первом использовании Google APIs пройдите авторизацию в браузере. Приложение запрашивает Gmail read-only, Gmail compose, Google Drive и Google Docs scopes. Если `token.json` не содержит все необходимые scopes, повторная авторизация запустится автоматически.
 After re-authorization, update the GitHub secret `GOOGLE_TOKEN_JSON` with the new `token.json` content.
 
 The master resume template should contain double-brace placeholders for sections to replace, such as `{{SUMMARY}}` or `{{EXPERIENCE}}`. `drive_service.py` replaces these placeholders in a copy of the template and saves both the tailored Google Doc and exported PDF in the configured output folder.
+
+`gmail_executor.py` creates a Gmail draft from the generated cover letter and PDF. Job data must include an explicit application address in `application_email` or `recipient`; the sender of a job alert is never treated as the employer's application address. The executor creates drafts only and does not send email.
 
 ### 4. Gemini API Key (GEMINI_API_KEY)
 1. Перейдите в [Google AI Studio](https://aistudio.google.com/).

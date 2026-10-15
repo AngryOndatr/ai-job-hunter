@@ -50,7 +50,7 @@ The system reads scan rules, keyword filters, and AI behavior policies from `con
    - In Google Cloud Console, enable **Gmail API**, **Google Drive API**, and **Google Docs API**.
    - Create an **OAuth 2.0 Client ID** for a Desktop Application.
    - Download the JSON file, rename it to `credentials.json`, and place it in the project root.
-   - On first Google API use, authorize the requested Gmail read-only, Drive, and Docs scopes in the browser. Existing tokens without the Drive/Docs scopes trigger re-authorization.
+   - On first Google API use, authorize the requested Gmail read-only, Gmail compose, Drive, and Docs scopes in the browser. Existing tokens without any required scope trigger re-authorization.
    - After re-authorization, update the GitHub `GOOGLE_TOKEN_JSON` secret with the new `token.json` content.
 3. **Telegram bot token and chat ID**
    - Create a bot via [@BotFather](https://t.me/BotFather) to get `TELEGRAM_BOT_TOKEN`.

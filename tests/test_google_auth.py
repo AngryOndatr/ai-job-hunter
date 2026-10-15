@@ -38,9 +38,17 @@ class GoogleAuthTests(unittest.TestCase):
         saved_token = json.loads(self.token_path.read_text(encoding="utf-8"))
         self.assertEqual(saved_token["token"], "updated-token")
 
-    def test_reauthorizes_old_token_that_lacks_drive_and_docs_scopes(self):
+    def test_reauthorizes_old_token_that_lacks_required_google_api_scopes(self):
         self.token_path.write_text(
-            json.dumps({"scopes": ["https://www.googleapis.com/auth/gmail.readonly"]}),
+            json.dumps(
+                {
+                    "scopes": [
+                        scope
+                        for scope in SCOPES
+                        if scope != "https://www.googleapis.com/auth/gmail.compose"
+                    ]
+                }
+            ),
             encoding="utf-8",
         )
         creds = self.make_credentials(SCOPES)
