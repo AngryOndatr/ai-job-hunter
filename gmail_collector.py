@@ -2,13 +2,10 @@ import os
 import json
 import base64
 from datetime import datetime, timedelta, timezone
-from google.auth.transport.requests import Request
-from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 import yaml
 
-SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']
+from google_auth import get_google_credentials
 
 class GmailJobCollector:
     def __init__(self, config_path="config.yaml"):
@@ -28,25 +25,7 @@ class GmailJobCollector:
         self.processed_ids = self._load_processed_ids()
 
     def _authenticate(self):
-        creds = None
-        if os.path.exists(self.token_file):
-            creds = Credentials.from_authorized_user_file(self.token_file, SCOPES)
-
-        if not creds or not creds.valid:
-            if creds and creds.expired and creds.refresh_token:
-                creds.refresh(Request())
-            else:
-                if not os.path.exists(self.credentials_file):
-                    raise FileNotFoundError(
-                        f"Credentials file '{self.credentials_file}' not found. "
-                        "Please download it from Google Cloud Console."
-                    )
-                flow = InstalledAppFlow.from_client_secrets_file(self.credentials_file, SCOPES)
-                creds = flow.run_local_server(port=0)
-
-            with open(self.token_file, "w") as token:
-                token.write(creds.to_json())
-
+        creds = get_google_credentials(self.credentials_file, self.token_file)
         return build('gmail', 'v1', credentials=creds)
 
     def _load_processed_ids(self):
