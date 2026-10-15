@@ -11,7 +11,7 @@ from google_auth import BASE_SCOPES, DRAFT_SCOPES, get_google_credentials
 
 
 SUPPORTED_LANGUAGES = {"en", "de", "uk"}
-MAX_JOBS_PER_RUN = 100
+MAX_JOBS_PER_RUN = 10  # Matches typical config.yaml default
 MAX_EMAIL_AGE_DAYS = 365
 
 

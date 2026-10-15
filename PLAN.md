@@ -20,7 +20,7 @@ This document outlines the step-by-step roadmap for implementing the **AI Job Hu
 - [x] **Task #6:** Implement deduplication logic via `processed_ids.json` to prevent reprocessing the same job alert.
 
 ## 🤖 Phase 4: AI Analysis & Tailoring Module (`ai_tailor.py` & `drive_service.py`)
-- [x] **Task #7:** Integrate Google Gemini `gemini-3.8-flash` to analyze job descriptions against the user's master profile (Java, Spring Boot, Full-Stack), using `GEMINI_API_KEY` and the configured language and match threshold.
+- [x] **Task #7:** Integrate Google Gemini to analyze job descriptions against the user's master profile (Java, Spring Boot, Full-Stack), using `GEMINI_API_KEY` and the configured language and match threshold. Model is configured via `config.ai_policy.model` (currently `gemini-2.5-flash-lite`).
 - [x] **Task #8:** Implement Google Drive & Docs API manager to clone the master resume template, inject tailored content, and export as PDF.
 - [x] **Task #9:** Generate dynamic, context-aware Cover Letters in the configured language.
 
@@ -37,11 +37,11 @@ This document outlines the step-by-step roadmap for implementing the **AI Job Hu
 
 Prepare the pipeline for reliable, secure, and observable operation before enabling unattended scheduled runs. Keep human review as the final step: the system may create application drafts but must never send them.
 
-- [ ] **Phase 7.1 (#22):** Add automated CI quality gates for pull requests.
-  - CI workflow and local test instructions are implemented; first GitHub Actions run is pending push/PR.
+- [x] **Phase 7.1 (#22):** Add automated CI quality gates for pull requests.
+  - CI workflow (`.github/workflows/run_agent.yml`) and local test instructions are implemented; first GitHub Actions run is pending push/PR.
   - Run the unit test suite on the supported Python version for pushes and pull requests.
   - Fail the workflow on test errors and document the local verification command.
-- [ ] **Phase 7.2 (#21):** Make dry-run execution independent of write-only integrations.
+- [x] **Phase 7.2 (#21):** Make dry-run execution independent of write-only integrations.
   - Dry-run skips draft/Telegram client initialization, leaves all processed IDs unchanged, and omits recipient addresses; automated coverage added.
   - Run ingestion and analysis without requiring Telegram credentials or initializing draft/notification clients.
   - Keep dry-run output useful while excluding unnecessary personal data and preserving processed-message state.
@@ -65,17 +65,17 @@ Prepare the pipeline for reliable, secure, and observable operation before enabl
   - Verify dry-run against the configured Google/Gemini accounts, then run a small capped live pilot that creates documents and drafts only.
   - Complete Phase 7.7.1 before treating the pilot as representative: relevant jobs without an application email must still produce usable application documents.
   - Confirm generated documents, Gmail drafts, processed-state recovery, Telegram alerts, and that no email is sent; record results and rollback steps before enabling scheduled execution.
-- [ ] **Phase 7.7.1:** Prepare applications for relevant jobs without an email recipient.
+- [x] **Phase 7.7.1:** Prepare applications for relevant jobs without an email recipient.
   - Decomposed into the following implementation tasks:
-    - [ ] **Phase 7.7.1.1 (#31):** Route eligible jobs without an application email to document-only preparation instead of marking them skipped.
-    - [ ] **Phase 7.7.1.2 (#32):** Create company-scoped Drive folders and save tailored resumes and cover letters as Google Docs and review-ready PDFs.
-    - [ ] **Phase 7.7.1.3 (#33):** Add durable completion, idempotent artifact recovery, and Telegram notifications for document-only applications.
-    - [ ] **Phase 7.7.1.4 (#34):** Extend dry-run reporting, automated coverage, and operator documentation for both email and document-only workflows.
+    - [x] **Phase 7.7.1.1 (#31):** Route eligible jobs without an application email to document-only preparation instead of marking them skipped.
+    - [x] **Phase 7.7.1.2 (#32):** Create company-scoped Drive folders and save tailored resumes and cover letters as Google Docs and review-ready PDFs.
+    - [x] **Phase 7.7.1.3 (#33):** Add durable completion, idempotent artifact recovery, and Telegram notifications for document-only applications.
+    - [x] **Phase 7.7.1.4 (#34):** Extend dry-run reporting, automated coverage, and operator documentation for both email and document-only workflows.
   - Jobs with recipients retain the existing Gmail-draft flow; eligible jobs without recipients still receive full analysis, tailoring, and factual-grounding review, with artifacts saved under `Output Folder/<Company Name>` and no Gmail draft.
   - Use safe company-folder names and a stable fallback when the company is unavailable. Retries must reconcile existing artifacts without duplicates, and document-only jobs must not be recorded as skipped.
   - Dry-run remains read-only and reports draft candidates separately from document-only candidates. Telegram notifications include Drive artifact links for completed document-only applications.
   - Acceptance: both routing paths work; below-threshold jobs remain skipped; document-only completion is durable and idempotent; dry-run has no external write side effects; automated tests cover both paths, retries, and reporting.
-- [ ] **Phase 7.8 (#23):** Separate factual profile source from resume output template.
+- [x] **Phase 7.8 (#23):** Separate factual profile source from resume output template.
   - Code, configuration schema, tests, and migration docs are implemented; configure the separate template ID before live use.
   - Read candidate facts from a dedicated master profile document and use a separate Google Doc as the output layout with replaceable placeholders.
   - Complete and verify this migration before the Phase 7.7 live pilot.
@@ -87,7 +87,7 @@ Prepare the pipeline for reliable, secure, and observable operation before enabl
 
 Polish the repository so its claims, verification evidence, and operational behavior are clear and credible to engineers reviewing the project. Complete the production-readiness safeguards in Phase 7 before calling the application production-ready; Phase 8 improves the engineering quality and presentation of the repository.
 
-- [ ] **Phase 8.1 (#25):** Reconcile documentation and implementation status.
+- [x] **Phase 8.1 (#25):** Reconcile documentation and implementation status.
   - Describe the current architecture accurately as a modular single-process pipeline unless the system is actually split into independently acting agents.
   - Scope ATS and other capability claims to behavior the code demonstrates; keep model/provider details consistent with configuration.
   - Audit phase and task checkboxes against merged code, CI results, and pending account-specific/live verification; distinguish implemented work from verified operation.

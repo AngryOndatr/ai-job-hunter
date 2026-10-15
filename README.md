@@ -16,7 +16,7 @@ Gmail → collect and deduplicate → Gemini analysis and tailoring → route by
 ## System Architecture Overview
 
 1. **Gmail Ingestion:** Scans targeted folders/labels and filters completed messages using a durable processing manifest in the configured Google Drive output folder.
-2. **AI Job Analysis:** Google Gemini `gemini-2.5-flash-lite` compares job requirements with the factual master profile and applies the configured match threshold.
+2. **AI Job Analysis:** Google Gemini compares job requirements with the factual master profile and applies the configured match threshold. The model is configured via `ai_policy.model` in `config.yaml` (currently `gemini-2.5-flash-lite`).
 3. **Document Generation:** Gemini tailors the resume template's `{{PLACEHOLDER}}` sections using profile evidence and generates a cover letter.
 4. **Application preparation:** With a recipient, creates a Gmail draft containing the cover letter and PDF resume. Without one, stores both documents and their PDFs under `Output Folder/<Company Name>`; missing or unsafe company names are handled safely.
 5. **Notification:** Sends a Telegram alert with a Gmail draft link or links to the document-only PDFs, depending on the route.
@@ -26,8 +26,8 @@ Gmail → collect and deduplicate → Gemini analysis and tailoring → route by
 ## 🚀 Key Features
 
 * **Targeted Ingestion & Deduplication:** Scans designated Gmail labels (`Glassdoor`, `LinkedIn`, `Michael Page`, `Stepstone.de`) and stores durable job statuses in a JSON manifest in Google Drive.
-* **Flexible Configuration (`config.yaml`):** Manage Gmail labels, target keywords, blacklists, match thresholds, and language preferences (`en`/`de`/`uk`) without modifying code.
-* **Intelligent ATS Analysis (LLM):** Evaluates job specs against your profile (Java / Spring Boot / Full-Stack), computes a `match_score`, and extracts missing keywords.
+* **Flexible Configuration (`config.yaml`):** Manage Gmail labels, match thresholds, and language preferences (`en`/`de`/`uk`) without modifying code. Keyword and blacklist filters are defined in configuration but are not yet applied by the ingestion or matching logic.
+* **LLM Job Analysis:** Evaluates job specs against your profile (Java / Spring Boot / Full-Stack), computes a `match_score`, and extracts missing keywords.
 * **Dynamic Resume Tailoring (Google Docs):** Clones your Google Docs resume template, updates relevant sections via Google Docs API while preserving styling, and exports a PDF.
 * **Cover Letter Generation:** Drafts personalized cover letters tailored to specific role requirements in your configured language.
 * **Two application paths:** Creates Gmail drafts when an application address is available, or company-folder documents when it is not.
