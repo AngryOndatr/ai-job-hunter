@@ -61,8 +61,9 @@ Prepare the pipeline for reliable, secure, and observable operation before enabl
   - Write a compact GitHub Actions step summary while retaining non-zero workflow exits for preflight and job failures.
   - Document failure triage, retries, draft recovery, and safe verification in `RUNBOOK.md` without logging credentials, message bodies, or profile content.
 - [ ] **Phase 7.7 (#16):** Complete controlled live verification and pilot.
-  - Verify dry-run against the configured Google/Gemini accounts, then run a small capped live pilot that creates drafts only.
-  - Confirm generated documents, Gmail drafts, processed-state recovery, Telegram alerts, and that no email is sent; record results and rollback steps.
+  - Manual workflow modes, one-job pilot cap, default-off scheduled-run gate, and a safe pilot record template are implemented; real-account verification is pending configured credentials and resume-template ID.
+  - Verify dry-run against the configured Google/Gemini accounts, then run a small capped live pilot that creates documents and drafts only.
+  - Confirm generated documents, Gmail drafts, processed-state recovery, Telegram alerts, and that no email is sent; record results and rollback steps before enabling scheduled execution.
 - [ ] **Phase 7.8 (#23):** Separate factual profile source from resume output template.
   - Code, configuration schema, tests, and migration docs are implemented; configure the separate template ID before live use.
   - Read candidate facts from a dedicated master profile document and use a separate Google Doc as the output layout with replaceable placeholders.

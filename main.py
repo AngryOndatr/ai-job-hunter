@@ -36,6 +36,7 @@ def run_pipeline(
     notifier: Any = None,
     state_store: Any = None,
     dry_run: bool = False,
+    max_jobs_override: int | None = None,
 ) -> dict[str, Any]:
     """Run one batch and return a report; dependencies can be injected for tests."""
     started_at = datetime.now(timezone.utc)
@@ -43,7 +44,15 @@ def run_pipeline(
     run_id = uuid.uuid4().hex
     load_dotenv()
     config = load_validated_config(config_path)
-    max_jobs = config["limits"]["max_jobs_per_run"]
+    configured_max_jobs = config["limits"]["max_jobs_per_run"]
+    if max_jobs_override is not None:
+        if type(max_jobs_override) is not int or not 1 <= max_jobs_override <= configured_max_jobs:
+            raise ConfigurationError(
+                "--max-jobs must be an integer from 1 through limits.max_jobs_per_run."
+            )
+        max_jobs = max_jobs_override
+    else:
+        max_jobs = configured_max_jobs
     validate_required_secrets(
         dry_run=dry_run,
         require_gemini=analyzer is None,
@@ -69,6 +78,7 @@ def run_pipeline(
     report = {
         "run_id": run_id,
         "started_at": started_at.isoformat(),
+        "max_jobs_limit": max_jobs,
         "fetched": len(collected_jobs),
         "attempted": len(batch),
         "drafts_created": 0,
@@ -306,9 +316,17 @@ def main() -> int:
         action="store_true",
         help="Run ingestion and AI analysis without creating documents, drafts, or notifications.",
     )
+    parser.add_argument(
+        "--max-jobs",
+        type=int,
+        help="Override the configured per-run job limit with a value no greater than it.",
+    )
     args = parser.parse_args()
     try:
-        report = run_pipeline(dry_run=args.dry_run)
+        report = run_pipeline(
+            dry_run=args.dry_run,
+            max_jobs_override=args.max_jobs,
+        )
     except ConfigurationError as exc:
         report = {
             "status": "preflight_failed",

@@ -9,6 +9,18 @@ This runbook covers the scheduled GitHub Actions job and local execution. The pi
 3. Open the failed **Run job application pipeline** step and inspect the JSON report. Each job error identifies its stage (`analysis`, `resume_tailoring`, `resume_document`, `gmail_draft`, `draft_recovery`, `processed_id_persistence`, or `telegram_notification`). Reports intentionally omit message bodies, profile text, and recipient addresses.
 4. Check Gmail Drafts for any draft already created. A Telegram notification failure can happen after a draft exists; use the recorded draft link and do not submit it without review.
 
+## Phase 7.7 controlled verification
+
+Scheduled executions are disabled unless the repository variable `ENABLE_SCHEDULED_RUNS` is exactly `true`. Keep it unset/false until the real-account pilot has been reviewed. Manual workflow dispatch offers `dry-run` (default) and `pilot`; the pilot accepts an explicit job cap that cannot exceed `limits.max_jobs_per_run`. Start with a cap of one.
+
+1. Complete the credential and template setup listed in `README.md`; confirm the factual profile and resume template are different documents and that the template has valid placeholders.
+2. Dispatch **AI Job Hunter** in `dry-run` mode with a cap of one. Confirm Gmail fetching, Gemini analysis, and expected `would_create_drafts`; verify no documents, drafts, Telegram messages, or processing-state writes were created.
+3. Review the candidate job and configuration. Dispatch `pilot` with cap one. This creates Drive artifacts and a Gmail draft, and sends the configured Telegram notification; it never sends the application email.
+4. Verify the resume/PDF in Drive, recipient, draft body and attachment in Gmail, Telegram alert, and terminal durable state. Confirm the draft is still unsent. Record outcome/run IDs in `PILOT_RESULTS_TEMPLATE.md` in a private location without personal content.
+5. Do not enable scheduled execution until recovery behavior and rollback are reviewed. If the pilot is approved, set `ENABLE_SCHEDULED_RUNS=true`; to disable scheduled runs, unset it or set it to `false`. Manual dispatch remains available for `dry-run` and capped `pilot`.
+
+Recovery verification must use an approved test message/artifact. Do not edit production manifest state or delete Drive/Gmail artifacts to simulate an interruption. If there is no safe test case, record recovery verification as deferred and leave scheduled runs disabled.
+
 ## Common failures
 
 | Stage / symptom | First checks | Safe next action |

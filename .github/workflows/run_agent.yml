@@ -4,6 +4,20 @@ on:
   schedule:
     - cron: "0 8 * * *"
   workflow_dispatch:
+    inputs:
+      run_mode:
+        description: "Run a read-only verification or a capped draft-only pilot"
+        type: choice
+        options:
+          - dry-run
+          - pilot
+        default: dry-run
+        required: true
+      max_jobs:
+        description: "Maximum jobs for this manual run (cannot exceed config.yaml limit)"
+        type: number
+        default: 1
+        required: true
 
 permissions:
   contents: read
@@ -15,6 +29,7 @@ concurrency:
 jobs:
   run-pipeline:
     environment: "AI Job Hunter"
+    if: github.event_name != 'schedule' || vars.ENABLE_SCHEDULED_RUNS == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -72,4 +87,15 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python -u main.py
+          RUN_MODE: ${{ inputs.run_mode }}
+          PILOT_MAX_JOBS: ${{ inputs.max_jobs }}
+        run: |
+          args=()
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            case "$RUN_MODE" in
+              dry-run) args+=(--dry-run) ;;
+              pilot) args+=(--max-jobs "$PILOT_MAX_JOBS") ;;
+              *) echo "Unsupported manual run mode." >&2; exit 2 ;;
+            esac
+          fi
+          python -u main.py "${args[@]}"

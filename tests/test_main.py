@@ -352,6 +352,38 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(report["attempted"], 1)
         self.collector.mark_processed.assert_called_once_with("gmail-message-1")
 
+    def test_manual_job_limit_caps_batch_and_is_recorded_in_report(self):
+        second_job = {**self.job, "id": "gmail-message-2"}
+        self.collector.fetch_new_job_emails.return_value = [self.job, second_job]
+
+        report = run_pipeline(
+            config_path=str(self.config_path),
+            collector=self.collector,
+            analyzer=self.analyzer,
+            drive_manager=self.drive,
+            draft_executor=self.draft_executor,
+            notifier=self.notifier,
+            state_store=self.state_store,
+            max_jobs_override=1,
+        )
+
+        self.assertEqual(report["fetched"], 2)
+        self.assertEqual(report["attempted"], 1)
+        self.assertEqual(report["max_jobs_limit"], 1)
+
+    def test_rejects_manual_job_limit_above_configured_limit(self):
+        with self.assertRaisesRegex(ValueError, "through limits.max_jobs_per_run"):
+            run_pipeline(
+                config_path=str(self.config_path),
+                collector=self.collector,
+                analyzer=self.analyzer,
+                drive_manager=self.drive,
+                draft_executor=self.draft_executor,
+                notifier=self.notifier,
+                state_store=self.state_store,
+                max_jobs_override=6,
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
