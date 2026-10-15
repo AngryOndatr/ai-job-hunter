@@ -105,7 +105,8 @@ def run_pipeline(
     if not isinstance(placeholders, list) or not placeholders:
         raise ValueError("The resume template has no replaceable sections.")
 
-    for job in batch:
+    for job_index, job in enumerate(batch, start=1):
+        print(f"Processing job {job_index}/{len(batch)}.", flush=True)
         message_id = job.get("id") if isinstance(job, Mapping) else None
         title = _job_title(job) if isinstance(job, Mapping) else "Unknown job"
         stage = "analysis"
@@ -119,6 +120,7 @@ def run_pipeline(
             if not dry_run and (prior_state or {}).get("status") != "draft_pending":
                 state_store.mark_status(message_id, "processing")
 
+            print(f"Job {job_index}/{len(batch)}: Gemini analysis.", flush=True)
             analysis = analyzer.analyze_job(job, master_profile)
             if not analysis.get("eligible_for_draft"):
                 if not dry_run:
@@ -140,6 +142,7 @@ def run_pipeline(
                 continue
 
             stage = "resume_tailoring"
+            print(f"Job {job_index}/{len(batch)}: tailoring outputs.", flush=True)
             tailored_sections = analyzer.generate_tailored_sections(
                 job, master_profile, analysis, placeholders
             )
@@ -245,6 +248,8 @@ def run_pipeline(
             report["errors"].append(
                 _error_record(message_id, title, stage, exc, draft=draft)
             )
+        finally:
+            print(f"Finished job {job_index}/{len(batch)}.", flush=True)
 
     return _finalize_report(report, started_clock)
 
