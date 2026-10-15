@@ -9,7 +9,7 @@ import yaml
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
 
-from google_auth import get_google_credentials
+from google_auth import BASE_SCOPES, get_google_credentials
 
 
 class ProcessingStateError(RuntimeError):
@@ -61,6 +61,7 @@ class GoogleDriveProcessingState:
             credentials = get_google_credentials(
                 paths.get("credentials_file", "credentials.json"),
                 paths.get("token_file", "token.json"),
+                scopes=BASE_SCOPES,
             )
             drive_service = build(
                 "drive", "v3", credentials=credentials, cache_discovery=False
@@ -77,6 +78,22 @@ class GoogleDriveProcessingState:
             message_id
             for message_id, record in self.state["jobs"].items()
             if record.get("status") in self.TERMINAL_STATUSES
+            and not (
+                record.get("status") == "skipped"
+                and record.get("reason") == "missing_application_recipient"
+            )
+        }
+
+    def get_reprocessable_ids(self) -> set[str]:
+        """Return nonterminal jobs and legacy recipient skips for retry/rerouting."""
+        return {
+            message_id
+            for message_id, record in self.state["jobs"].items()
+            if record.get("status") not in self.TERMINAL_STATUSES
+            or (
+                record.get("status") == "skipped"
+                and record.get("reason") == "missing_application_recipient"
+            )
         }
 
     def get_job_state(self, message_id: str) -> dict[str, Any] | None:

@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from googleapiclient.discovery import build
 import yaml
 
-from google_auth import get_google_credentials
+from google_auth import BASE_SCOPES, get_google_credentials
 
 class GmailJobCollector:
     def __init__(self, config_path="config.yaml"):
@@ -25,7 +25,9 @@ class GmailJobCollector:
         self.processed_ids = self._load_processed_ids()
 
     def _authenticate(self):
-        creds = get_google_credentials(self.credentials_file, self.token_file)
+        creds = get_google_credentials(
+            self.credentials_file, self.token_file, scopes=BASE_SCOPES
+        )
         return build('gmail', 'v1', credentials=creds)
 
     def _load_processed_ids(self):
@@ -41,10 +43,11 @@ class GmailJobCollector:
         with open(self.processed_ids_file, "w", encoding="utf-8") as f:
             json.dump(sorted(self.processed_ids), f, indent=2)
 
-    def fetch_new_job_emails(self, defer_processed=False):
+    def fetch_new_job_emails(self, defer_processed=False, reprocess_ids=None):
         """Сканирует новые письма по целевым меткам с учетом даты и дедупликации."""
         all_messages = []
         discovered_ids = set()
+        reprocess_ids = set(reprocess_ids or ())
         cutoff_date = datetime.now(timezone.utc) - timedelta(days=self.max_age_days)
 
         # Получаем список лейблов в Gmail для сопоставления названий с ID
@@ -69,7 +72,10 @@ class GmailJobCollector:
                 messages = results.get('messages', [])
                 for msg in messages:
                     msg_id = msg['id']
-                    if msg_id in self.processed_ids or msg_id in discovered_ids:
+                    if (
+                        (msg_id in self.processed_ids and msg_id not in reprocess_ids)
+                        or msg_id in discovered_ids
+                    ):
                         continue
 
                     # Получаем детали письма

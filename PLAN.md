@@ -67,10 +67,10 @@ Prepare the pipeline for reliable, secure, and observable operation before enabl
   - Confirm generated documents, Gmail drafts, processed-state recovery, Telegram alerts, and that no email is sent; record results and rollback steps before enabling scheduled execution.
 - [ ] **Phase 7.7.1:** Prepare applications for relevant jobs without an email recipient.
   - Decomposed into the following implementation tasks:
-    - [ ] **Phase 7.7.1.1:** Route eligible jobs without an application email to document-only preparation instead of marking them skipped.
-    - [ ] **Phase 7.7.1.2:** Create company-scoped Drive folders and save tailored resumes and cover letters as Google Docs and review-ready PDFs.
-    - [ ] **Phase 7.7.1.3:** Add durable completion, idempotent artifact recovery, and Telegram notifications for document-only applications.
-    - [ ] **Phase 7.7.1.4:** Extend dry-run reporting, automated coverage, and operator documentation for both email and document-only workflows.
+    - [ ] **Phase 7.7.1.1 (#31):** Route eligible jobs without an application email to document-only preparation instead of marking them skipped.
+    - [ ] **Phase 7.7.1.2 (#32):** Create company-scoped Drive folders and save tailored resumes and cover letters as Google Docs and review-ready PDFs.
+    - [ ] **Phase 7.7.1.3 (#33):** Add durable completion, idempotent artifact recovery, and Telegram notifications for document-only applications.
+    - [ ] **Phase 7.7.1.4 (#34):** Extend dry-run reporting, automated coverage, and operator documentation for both email and document-only workflows.
   - Jobs with recipients retain the existing Gmail-draft flow; eligible jobs without recipients still receive full analysis, tailoring, and factual-grounding review, with artifacts saved under `Output Folder/<Company Name>` and no Gmail draft.
   - Use safe company-folder names and a stable fallback when the company is unavailable. Retries must reconcile existing artifacts without duplicates, and document-only jobs must not be recorded as skipped.
   - Dry-run remains read-only and reports draft candidates separately from document-only candidates. Telegram notifications include Drive artifact links for completed document-only applications.

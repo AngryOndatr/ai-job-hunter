@@ -94,7 +94,7 @@ pip install -r requirements.txt
 2. Enable the **Gmail API**, **Google Drive API** и **Google Docs API**.
 3. Create an **OAuth 2.0 Client ID** (Тип приложения: *Desktop App* / *Рабочий стол*).
 4. Download the JSON credential file, rename it to `credentials.json`, and place it in the root directory.
-5. При первом использовании Google APIs пройдите авторизацию в браузере. Приложение запрашивает Gmail read-only, Gmail compose, Google Drive и Google Docs scopes. Если `token.json` не содержит все необходимые scopes, повторная авторизация запустится автоматически.
+5. При первом использовании Google APIs пройдите авторизацию в браузере. Приложение запрашивает Gmail read-only, Google Drive и Google Docs scopes; Gmail compose запрашивается только если в обрабатываемой пачке есть подходящая вакансия с адресом для заявки. Если `token.json` не содержит scopes для выбранного сценария, повторная авторизация запустится автоматически.
 After re-authorization, update the GitHub secret `GOOGLE_TOKEN_JSON` with the new `token.json` content.
 
 Configure two different Google Docs in `config.yaml`:
@@ -132,13 +132,13 @@ python main.py
 ```
 *Note: On initial execution, a browser window will open requesting Google API authorization. Upon approval, `token.json` will be generated automatically.*
 
-Before scanning Gmail, startup validates the required configuration fields and ranges, checks the secrets needed for the selected run mode, and verifies that Google OAuth credentials include the required Gmail, Drive, and Docs scopes. Preflight errors identify the setting to fix without printing secret values. A normal run requires Gemini and Telegram credentials; `--dry-run` requires Gemini credentials but does not require Telegram credentials.
+Before processing, startup validates configuration and required secrets. Gmail read-only, Drive, and Docs scopes are needed for ingestion and document access; Gmail compose is required only when the batch contains a job with an application recipient. A normal run requires Gemini and Telegram credentials; `--dry-run` requires Gemini credentials but does not require Telegram or Gmail compose access.
 
 To verify ingestion and AI analysis without creating Google Docs, Gmail drafts, Telegram notifications, or marking messages as processed, run:
 ```bash
 python main.py --dry-run
 ```
-The JSON report lists eligible applications under `would_create_drafts` without including recipient addresses. Dry runs read Gmail and the two configured Google Docs and call Gemini, so they require valid Google OAuth credentials and `GEMINI_API_KEY`; Telegram secrets are not required.
+The JSON report lists email-based applications under `would_create_drafts` and document-only applications under `would_create_documents`, without including recipient addresses. Dry runs read Gmail and the two configured Google Docs and call Gemini, so they require valid Google OAuth credentials and `GEMINI_API_KEY`; Telegram secrets and Gmail compose access are not required.
 
 ### Run automated tests
 

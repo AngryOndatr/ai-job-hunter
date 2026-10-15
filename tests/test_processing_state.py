@@ -85,6 +85,25 @@ class ProcessingStateTests(unittest.TestCase):
         self.assertEqual(store.get_terminal_ids(), {"gmail-done"})
         self.assertEqual(store.file_id, "state-file")
 
+    def test_legacy_missing_recipient_skips_are_reprocessable(self):
+        store = self.make_store()
+        store.state["jobs"] = {
+            "gmail-recipient-missing": {
+                "status": "skipped",
+                "reason": "missing_application_recipient",
+            },
+            "gmail-low-match": {
+                "status": "skipped",
+                "reason": "below_match_threshold",
+            },
+            "gmail-in-progress": {"status": "processing"},
+        }
+
+        self.assertEqual(store.get_reprocessable_ids(), {
+            "gmail-recipient-missing", "gmail-in-progress"
+        })
+        self.assertEqual(store.get_terminal_ids(), {"gmail-low-match"})
+
 
 if __name__ == "__main__":
     unittest.main()

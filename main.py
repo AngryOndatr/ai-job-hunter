@@ -26,6 +26,10 @@ from config_validation import (
 from telegram_notifier import TelegramNotifier
 
 
+class DocumentOnlyOutputPendingError(RuntimeError):
+    """Raised until the follow-up document-only Drive output is implemented."""
+
+
 def run_pipeline(
     config_path: str = "config.yaml",
     *,
@@ -62,16 +66,18 @@ def run_pipeline(
         collector is None
         or drive_manager is None
         or state_store is None
-        or (not dry_run and draft_executor is None)
     )
     if needs_google_oauth:
-        preflight_google_oauth(config)
+        preflight_google_oauth(config, require_gmail_compose=False)
 
     collector = collector or GmailJobCollector(config_path=config_path)
-    collected_jobs = collector.fetch_new_job_emails(defer_processed=True)
+    state_store = state_store or GoogleDriveProcessingState(config_path=config_path)
+    reprocess_ids = state_store.get_reprocessable_ids()
+    collected_jobs = collector.fetch_new_job_emails(
+        defer_processed=True, reprocess_ids=reprocess_ids
+    )
     jobs = collected_jobs
     if collected_jobs:
-        state_store = state_store or GoogleDriveProcessingState(config_path=config_path)
         terminal_ids = state_store.get_terminal_ids()
         jobs = [job for job in collected_jobs if not isinstance(job, Mapping) or job.get("id") not in terminal_ids]
     batch = jobs[:max_jobs]
@@ -85,6 +91,7 @@ def run_pipeline(
         "notifications_sent": 0,
         "dry_run": dry_run,
         "would_create_drafts": [],
+        "would_create_documents": [],
         "skipped": [],
         "errors": [],
     }
@@ -94,7 +101,6 @@ def run_pipeline(
     analyzer = analyzer or GeminiJobAnalyzer(config_path=config_path)
     drive_manager = drive_manager or GoogleDriveManager(config_path=config_path)
     if not dry_run:
-        draft_executor = draft_executor or GmailDraftExecutor(config_path=config_path)
         notifier = notifier or TelegramNotifier()
 
     master_profile = drive_manager.load_master_profile()
@@ -131,15 +137,10 @@ def run_pipeline(
                 )
                 continue
 
-            recipient = job.get("application_email") or job.get("recipient")
-            if not recipient:
-                if not dry_run:
-                    state_store.mark_status(message_id, "skipped", reason="missing_application_recipient")
-                    collector.mark_processed(message_id)
-                report["skipped"].append(
-                    {"job_id": message_id, "title": title, "reason": "missing_application_recipient"}
-                )
-                continue
+            recipient = _application_recipient(job)
+            if recipient and not dry_run and draft_executor is None:
+                preflight_google_oauth(config, require_gmail_compose=True)
+                draft_executor = GmailDraftExecutor(config_path=config_path)
 
             stage = "resume_tailoring"
             print(f"Job {job_index}/{len(batch)}: tailoring outputs.", flush=True)
@@ -148,7 +149,12 @@ def run_pipeline(
             )
             cover_letter = analyzer.generate_cover_letter(job, master_profile, analysis)
 
-            if not dry_run and (prior_state or {}).get("status") == "draft_pending" and pending_key:
+            if (
+                recipient
+                and not dry_run
+                and (prior_state or {}).get("status") == "draft_pending"
+                and pending_key
+            ):
                 stage = "draft_recovery"
                 draft = draft_executor.find_existing_draft(
                     pending_key,
@@ -182,10 +188,18 @@ def run_pipeline(
                     continue
 
             if dry_run:
-                report["would_create_drafts"].append(
-                    {"job_id": message_id, "title": title}
-                )
+                candidate = {"job_id": message_id, "title": title}
+                if recipient:
+                    report["would_create_drafts"].append(candidate)
+                else:
+                    report["would_create_documents"].append(candidate)
                 continue
+
+            if not recipient:
+                stage = "document_only_application"
+                raise DocumentOnlyOutputPendingError(
+                    "Drive output for jobs without an application email is not implemented yet."
+                )
 
             idempotency_key = draft_executor.idempotency_message_id(message_id)
             drive_key = idempotency_key.strip("<>").split("@", 1)[0]
@@ -275,6 +289,15 @@ def _job_title(job: Mapping[str, Any]) -> str:
     return title.strip() if isinstance(title, str) and title.strip() else "Untitled job"
 
 
+def _application_recipient(job: Any) -> Any:
+    if not isinstance(job, Mapping):
+        return None
+    recipient = job.get("application_email") or job.get("recipient")
+    if isinstance(recipient, str):
+        recipient = recipient.strip()
+    return recipient or None
+
+
 def _draft_subject(job: Mapping[str, Any]) -> str:
     title = _job_title(job)
     employer = str(job.get("employer") or job.get("company") or "").strip()
@@ -297,6 +320,7 @@ def _error_record(
         "GmailDraftError",
         "TelegramNotificationError",
         "ProcessingStateError",
+        "DocumentOnlyOutputPendingError",
     }
     detail = (
         str(error)

@@ -11,7 +11,7 @@ from config_validation import (
     preflight_google_oauth,
     validate_required_secrets,
 )
-from google_auth import SCOPES
+from google_auth import BASE_SCOPES, SCOPES
 
 
 class ConfigValidationTests(unittest.TestCase):
@@ -93,6 +93,15 @@ class ConfigValidationTests(unittest.TestCase):
 
         credentials.has_scopes.assert_called_once_with(SCOPES)
         self.assertIn("required Gmail, Drive, or Docs scopes", str(caught.exception))
+
+    def test_document_only_preflight_does_not_require_gmail_compose_scope(self):
+        credentials = Mock()
+        credentials.has_scopes.return_value = True
+
+        with patch("config_validation.get_google_credentials", return_value=credentials):
+            preflight_google_oauth(self.config, require_gmail_compose=False)
+
+        credentials.has_scopes.assert_called_once_with(BASE_SCOPES)
 
     def test_redacts_unexpected_oauth_exception_details(self):
         secret_value = "private-refresh-token"

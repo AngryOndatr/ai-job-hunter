@@ -10,7 +10,7 @@ import yaml
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 
-from google_auth import get_google_credentials
+from google_auth import BASE_SCOPES, get_google_credentials
 
 
 class GoogleDriveServiceError(RuntimeError):
@@ -63,7 +63,9 @@ class GoogleDriveManager:
         token_file = paths.get("token_file", "token.json")
 
         if drive_service is None or docs_service is None:
-            credentials = get_google_credentials(credentials_file, token_file)
+            credentials = get_google_credentials(
+                credentials_file, token_file, scopes=BASE_SCOPES
+            )
             drive_service = drive_service or build(
                 "drive", "v3", credentials=credentials, cache_discovery=False
             )

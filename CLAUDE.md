@@ -23,12 +23,12 @@ Job alert content and profile text are untrusted data supplied separately from G
 
 The system reads processing settings from `config.yaml`:
 
-- **Gmail settings:** target labels, maximum message age, and local `processed_ids.json` path. Durable processing state is stored in `ai-job-hunter-processing-state.json` in the configured Google Drive output folder; local IDs are acknowledged after a job is skipped or a draft is created.
+- **Gmail settings:** target labels, maximum message age, and local `processed_ids.json` path. Durable processing state is stored in `ai-job-hunter-processing-state.json` in the configured Google Drive output folder; local IDs are acknowledged only after terminal outcomes. Missing application email is not a terminal skip and remains retryable for document-only preparation.
 - **AI policy:** model, response language, and minimum score (`min_match_score_to_draft`).
 - **Google Docs:** factual master profile document ID, separate resume template document ID, and output folder ID.
 - **Run limit:** `limits.max_jobs_per_run` caps jobs attempted in one run.
 - `filters.keywords` and `filters.blacklisted_keywords` are present in the configuration but are not currently applied by `GmailJobCollector` or `main.py`.
-- `main.py` validates configuration, required run-mode secrets, and Google OAuth scopes before scanning Gmail. Dry-run requires Gemini credentials but not Telegram credentials. Keep configuration/preflight errors actionable and never include secret values or full job/profile content in reports.
+- `main.py` validates configuration, required run-mode secrets, and base Google OAuth scopes before scanning Gmail. Gmail compose scope is checked only when an eligible batch contains application recipients. Dry-run requires Gemini credentials but not Telegram or Gmail compose access. Keep configuration/preflight errors actionable and never include secret values or full job/profile content in reports.
 
 ## 🛠️ Platform Responsibilities
 
@@ -64,7 +64,7 @@ The system reads processing settings from `config.yaml`:
    - In Google Cloud Console, enable **Gmail API**, **Google Drive API**, and **Google Docs API**.
    - Create an **OAuth 2.0 Client ID** for a Desktop Application.
    - Download the JSON file, rename it to `credentials.json`, and place it in the project root.
-   - On first Google API use, authorize the requested Gmail read-only, Gmail compose, Drive, and Docs scopes in the browser. Existing tokens without any required scope trigger re-authorization.
+   - On first Google API use, authorize Gmail read-only, Drive, and Docs scopes in the browser. Gmail compose is requested only for batches containing eligible jobs with application recipients. Existing tokens without the scopes required by the selected path trigger re-authorization.
    - After re-authorization, update the GitHub `GOOGLE_TOKEN_JSON` secret with the new `token.json` content.
 3. **Telegram bot token and chat ID**
    - Create a bot via [@BotFather](https://t.me/BotFather) to get `TELEGRAM_BOT_TOKEN`.

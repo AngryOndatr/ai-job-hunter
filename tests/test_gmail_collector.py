@@ -56,6 +56,16 @@ class GmailJobCollectorTests(unittest.TestCase):
         self.assertIn("message-1", self.collector.processed_ids)
         self.assertEqual(json.loads(self.processed_path.read_text(encoding="utf-8")), ["message-1"])
 
+    def test_reprocess_ids_override_local_processed_cache(self):
+        self.collector.processed_ids = {"message-1"}
+
+        jobs = self.collector.fetch_new_job_emails(
+            defer_processed=True, reprocess_ids={"message-1"}
+        )
+
+        self.assertEqual([job["id"] for job in jobs], ["message-1"])
+        self.assertIn("message-1", self.collector.processed_ids)
+
     def test_processed_id_file_is_written_in_stable_sorted_order(self):
         self.collector.processed_ids = {"message-z", "message-a"}
 

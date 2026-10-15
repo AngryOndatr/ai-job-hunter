@@ -7,7 +7,7 @@ from typing import Any
 import yaml
 from dotenv import load_dotenv
 
-from google_auth import SCOPES, get_google_credentials
+from google_auth import BASE_SCOPES, DRAFT_SCOPES, get_google_credentials
 
 
 SUPPORTED_LANGUAGES = {"en", "de", "uk"}
@@ -136,17 +136,25 @@ def validate_required_secrets(
         raise ConfigurationError(f"Missing required environment variable(s): {names}.")
 
 
-def preflight_google_oauth(config: Mapping[str, Any]) -> None:
-    """Refresh or obtain scoped Google credentials before Gmail scanning starts."""
+def preflight_google_oauth(
+    config: Mapping[str, Any], *, require_gmail_compose: bool = True
+) -> None:
+    """Refresh or obtain the Google scopes required by the selected application path."""
     paths = config["paths"]
+    scopes = DRAFT_SCOPES if require_gmail_compose else BASE_SCOPES
     try:
         credentials = get_google_credentials(
-            paths["credentials_file"], paths["token_file"]
+            paths["credentials_file"], paths["token_file"], scopes=scopes
         )
-        if not credentials.has_scopes(SCOPES):
+        if not credentials.has_scopes(scopes):
+            missing_scope_context = (
+                "Gmail compose, Gmail read, Drive, or Docs"
+                if require_gmail_compose
+                else "Gmail read, Drive, or Docs"
+            )
             raise ConfigurationError(
-                "Google OAuth token is missing required Gmail, Drive, or Docs scopes. "
-                "Reauthorize the account with the project scopes."
+                f"Google OAuth token is missing required {missing_scope_context} scopes. "
+                "Reauthorize the account with the scopes required by this application path."
             )
     except ConfigurationError:
         raise

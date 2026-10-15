@@ -85,6 +85,7 @@ class PipelineTests(unittest.TestCase):
         self.notifier = Mock()
         self.state_store = Mock()
         self.state_store.get_terminal_ids.return_value = set()
+        self.state_store.get_reprocessable_ids.return_value = set()
         self.state_store.get_job_state.return_value = None
 
     def run_with_components(self):
@@ -107,7 +108,9 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(report["notifications_sent"], 1)
         self.assertEqual(report["errors"], [])
         self.assertEqual(report["skipped"], [])
-        self.collector.fetch_new_job_emails.assert_called_once_with(defer_processed=True)
+        self.collector.fetch_new_job_emails.assert_called_once_with(
+            defer_processed=True, reprocess_ids=set()
+        )
         self.drive.load_master_profile.assert_called_once_with()
         self.drive.load_resume_template.assert_called_once_with()
         self.analyzer.analyze_job.assert_called_once_with(
@@ -186,11 +189,16 @@ class PipelineTests(unittest.TestCase):
 
         self.assertEqual(
             [entry["reason"] for entry in report["skipped"]],
-            ["below_match_threshold", "missing_application_recipient"],
+            ["below_match_threshold"],
+        )
+        self.assertEqual(
+            report["would_create_documents"],
+            [{"job_id": "gmail-message-2", "title": "Senior Java Engineer"}],
         )
         self.collector.mark_processed.assert_not_called()
 
-    def test_dry_run_report_omits_application_recipient(self):
+    def test_dry_run_routes_jobs_without_recipient_to_document_only_candidates(self):
+        self.job["application_email"] = ""
         report = run_pipeline(
             config_path=str(self.config_path),
             collector=self.collector,
@@ -200,12 +208,13 @@ class PipelineTests(unittest.TestCase):
             dry_run=True,
         )
 
+        self.assertEqual(report["would_create_drafts"], [])
         self.assertEqual(
-            report["would_create_drafts"],
+            report["would_create_documents"],
             [{"job_id": "gmail-message-1", "title": "Senior Java Engineer"}],
         )
 
-    def test_marks_below_threshold_and_missing_recipient_jobs_as_skipped(self):
+    def test_missing_recipient_is_retryable_and_not_marked_skipped_or_processed(self):
         second_job = {**self.job, "id": "gmail-message-2", "application_email": ""}
         self.collector.fetch_new_job_emails.return_value = [self.job, second_job]
         self.analyzer.analyze_job.side_effect = [
@@ -218,14 +227,38 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(report["drafts_created"], 0)
         self.assertEqual(
             [entry["reason"] for entry in report["skipped"]],
-            ["below_match_threshold", "missing_application_recipient"],
+            ["below_match_threshold"],
         )
         self.assertEqual(
             self.collector.mark_processed.call_args_list,
-            [unittest.mock.call("gmail-message-1"), unittest.mock.call("gmail-message-2")],
+            [unittest.mock.call("gmail-message-1")],
+        )
+        self.assertEqual(report["errors"][0]["stage"], "document_only_application")
+        self.assertEqual(report["errors"][0]["job_id"], "gmail-message-2")
+        self.state_store.mark_status.assert_any_call("gmail-message-2", "processing")
+        self.assertNotIn(
+            unittest.mock.call(
+                "gmail-message-2", "skipped", reason="missing_application_recipient"
+            ),
+            self.state_store.mark_status.call_args_list,
         )
         self.draft_executor.create_draft.assert_not_called()
         self.notifier.send_notification.assert_not_called()
+
+    def test_document_only_route_does_not_initialize_gmail_draft_executor(self):
+        self.job["application_email"] = ""
+        with patch("main.GmailDraftExecutor") as draft_factory:
+            report = run_pipeline(
+                config_path=str(self.config_path),
+                collector=self.collector,
+                analyzer=self.analyzer,
+                drive_manager=self.drive,
+                notifier=self.notifier,
+                state_store=self.state_store,
+            )
+
+        draft_factory.assert_not_called()
+        self.assertEqual(report["errors"][0]["stage"], "document_only_application")
 
     def test_continues_after_a_job_failure_and_retries_failed_job_next_run(self):
         second_job = {**self.job, "id": "gmail-message-2", "subject": "Backend Engineer"}
@@ -302,7 +335,7 @@ class PipelineTests(unittest.TestCase):
         collector_instance = Mock()
         collector_instance.fetch_new_job_emails.return_value = []
 
-        def oauth_preflight(_config):
+        def oauth_preflight(_config, **_kwargs):
             events.append("oauth")
 
         def create_collector(**_kwargs):
@@ -320,7 +353,11 @@ class PipelineTests(unittest.TestCase):
         ):
             with patch("main.preflight_google_oauth", side_effect=oauth_preflight):
                 with patch("main.GmailJobCollector", side_effect=create_collector):
-                    run_pipeline(config_path=str(self.config_path))
+                    with patch(
+                        "main.GoogleDriveProcessingState",
+                        return_value=self.state_store,
+                    ):
+                        run_pipeline(config_path=str(self.config_path))
 
         self.assertEqual(events, ["oauth", "collector"])
 

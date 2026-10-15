@@ -97,12 +97,11 @@ jobs:
               scopes = scopes.split()
           required_scopes = {
               "https://www.googleapis.com/auth/gmail.readonly",
-              "https://www.googleapis.com/auth/gmail.compose",
               "https://www.googleapis.com/auth/drive",
               "https://www.googleapis.com/auth/documents",
           }
           if not isinstance(scopes, list) or not required_scopes.issubset(set(scopes)):
-              raise SystemExit("GOOGLE_TOKEN_JSON must be reauthorized with all project Google API scopes.")
+              raise SystemExit("GOOGLE_TOKEN_JSON must include Gmail read-only, Drive, and Docs scopes.")
           if not token_data.get("refresh_token"):
               raise SystemExit("GOOGLE_TOKEN_JSON must include an OAuth refresh token for scheduled runs.")
           token_path = Path("token.json")

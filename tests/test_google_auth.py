@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from google_auth import SCOPES, get_google_credentials
+from google_auth import BASE_SCOPES, SCOPES, get_google_credentials
 
 
 class GoogleAuthTests(unittest.TestCase):
@@ -63,6 +63,34 @@ class GoogleAuthTests(unittest.TestCase):
         self.assertIs(result, creds)
         create_flow.assert_called_once_with(str(self.credentials_path), SCOPES)
         flow.run_local_server.assert_called_once_with(port=0)
+
+    def test_reuses_read_and_drive_token_without_gmail_compose_scope(self):
+        self.token_path.write_text(
+            json.dumps({"scopes": BASE_SCOPES}), encoding="utf-8"
+        )
+        creds = self.make_credentials(BASE_SCOPES)
+
+        with patch("google_auth.Credentials.from_authorized_user_file", return_value=creds) as load:
+            with patch("google_auth.InstalledAppFlow.from_client_secrets_file") as oauth_flow:
+                result = get_google_credentials(
+                    str(self.credentials_path), str(self.token_path), scopes=BASE_SCOPES
+                )
+
+        self.assertIs(result, creds)
+        load.assert_called_once_with(str(self.token_path), BASE_SCOPES)
+        oauth_flow.assert_not_called()
+
+    def test_preserves_granted_compose_scope_when_loading_token_for_document_only_use(self):
+        self.token_path.write_text(json.dumps({"scopes": SCOPES}), encoding="utf-8")
+        creds = self.make_credentials(BASE_SCOPES)
+
+        with patch("google_auth.Credentials.from_authorized_user_file", return_value=creds):
+            get_google_credentials(
+                str(self.credentials_path), str(self.token_path), scopes=BASE_SCOPES
+            )
+
+        saved_token = json.loads(self.token_path.read_text(encoding="utf-8"))
+        self.assertEqual(saved_token["scopes"], SCOPES)
 
     def test_requires_oauth_client_file_when_existing_token_has_insufficient_scopes(self):
         self.token_path.write_text(json.dumps({"scopes": []}), encoding="utf-8")

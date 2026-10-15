@@ -12,7 +12,7 @@ from typing import Any
 import yaml
 from googleapiclient.discovery import build
 
-from google_auth import get_google_credentials
+from google_auth import DRAFT_SCOPES, get_google_credentials
 
 
 class GmailDraftError(RuntimeError):
@@ -33,7 +33,9 @@ class GmailDraftExecutor:
             paths = config.get("paths", {})
             credentials_file = paths.get("credentials_file", "credentials.json")
             token_file = paths.get("token_file", "token.json")
-            credentials = get_google_credentials(credentials_file, token_file)
+            credentials = get_google_credentials(
+                credentials_file, token_file, scopes=DRAFT_SCOPES
+            )
             service = build("gmail", "v1", credentials=credentials, cache_discovery=False)
 
         self.service = service
