@@ -47,4 +47,4 @@ paths:
 
 # Лимиты обработки за один запуск
 limits:
-  max_jobs_per_run: 5
+  max_jobs_per_run: 10
