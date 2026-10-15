@@ -2,8 +2,12 @@
 
 import argparse
 import json
+import os
 import sys
+import time
+import uuid
 from collections.abc import Mapping
+from datetime import datetime, timezone
 from typing import Any
 
 from dotenv import load_dotenv
@@ -34,6 +38,9 @@ def run_pipeline(
     dry_run: bool = False,
 ) -> dict[str, Any]:
     """Run one batch and return a report; dependencies can be injected for tests."""
+    started_at = datetime.now(timezone.utc)
+    started_clock = time.monotonic()
+    run_id = uuid.uuid4().hex
     load_dotenv()
     config = load_validated_config(config_path)
     max_jobs = config["limits"]["max_jobs_per_run"]
@@ -60,6 +67,8 @@ def run_pipeline(
         jobs = [job for job in collected_jobs if not isinstance(job, Mapping) or job.get("id") not in terminal_ids]
     batch = jobs[:max_jobs]
     report = {
+        "run_id": run_id,
+        "started_at": started_at.isoformat(),
         "fetched": len(collected_jobs),
         "attempted": len(batch),
         "drafts_created": 0,
@@ -70,7 +79,7 @@ def run_pipeline(
         "errors": [],
     }
     if not batch:
-        return report
+        return _finalize_report(report, started_clock)
 
     analyzer = analyzer or GeminiJobAnalyzer(config_path=config_path)
     drive_manager = drive_manager or GoogleDriveManager(config_path=config_path)
@@ -227,6 +236,22 @@ def run_pipeline(
                 _error_record(message_id, title, stage, exc, draft=draft)
             )
 
+    return _finalize_report(report, started_clock)
+
+
+def _finalize_report(report: dict[str, Any], started_clock: float) -> dict[str, Any]:
+    """Add aggregate run diagnostics without copying job or profile content."""
+    report["finished_at"] = datetime.now(timezone.utc).isoformat()
+    report["duration_seconds"] = round(time.monotonic() - started_clock, 3)
+    report["status"] = "partial_failure" if report["errors"] else "success"
+    report["summary"] = {
+        "fetched": report["fetched"],
+        "attempted": report["attempted"],
+        "drafts_created": report["drafts_created"],
+        "notifications_sent": report["notifications_sent"],
+        "skipped": len(report["skipped"]),
+        "errors": len(report["errors"]),
+    }
     return report
 
 
@@ -285,10 +310,69 @@ def main() -> int:
     try:
         report = run_pipeline(dry_run=args.dry_run)
     except ConfigurationError as exc:
-        print(f"Preflight failed: {exc}", file=sys.stderr)
+        report = {
+            "status": "preflight_failed",
+            "error": str(exc),
+        }
+        _write_json_report(report, stream=sys.stderr)
+        _write_github_summary(report)
         return 2
-    print(json.dumps(report, ensure_ascii=False, indent=2))
+    except Exception as exc:
+        report = {
+            "status": "startup_failed",
+            "error": (
+                f"{type(exc).__name__}: Details redacted to protect credentials "
+                "and application content."
+            ),
+        }
+        _write_json_report(report, stream=sys.stderr)
+        _write_github_summary(report)
+        return 1
+    _write_json_report(report)
+    _write_github_summary(report)
     return 1 if report["errors"] else 0
+
+
+def _write_json_report(report: Mapping[str, Any], *, stream: Any = None) -> None:
+    print(json.dumps(report, ensure_ascii=False, indent=2), file=stream or sys.stdout)
+
+
+def _write_github_summary(report: Mapping[str, Any]) -> None:
+    """Write a compact, content-safe run summary when invoked by GitHub Actions."""
+    summary_path = os.getenv("GITHUB_STEP_SUMMARY")
+    if not summary_path:
+        return
+    counts = report.get("summary", {})
+    lines = [
+        "## AI Job Hunter run",
+        "",
+        f"- **Status:** {report.get('status', 'unknown')}",
+        f"- **Run ID:** `{report.get('run_id', 'unavailable')}`",
+        f"- **Duration:** {report.get('duration_seconds', 'unavailable')} seconds",
+        f"- **Fetched / attempted:** {counts.get('fetched', 0)} / {counts.get('attempted', 0)}",
+        f"- **Drafts created:** {counts.get('drafts_created', 0)}",
+        f"- **Notifications sent:** {counts.get('notifications_sent', 0)}",
+        f"- **Skipped / errors:** {counts.get('skipped', 0)} / {counts.get('errors', 0)}",
+    ]
+    if report.get("error"):
+        lines.extend(["", f"**Startup detail:** {_markdown_cell(report['error'])}"])
+    errors = report.get("errors", [])
+    if errors:
+        lines.extend(["", "### Failed jobs", "", "| Stage | Error |", "|---|---|"])
+        for error in errors:
+            stage = _markdown_cell(error.get("stage", "unknown"))
+            detail = _markdown_cell(error.get("error", "Unspecified error"))
+            lines.append(f"| {stage} | {detail} |")
+    try:
+        with open(summary_path, "a", encoding="utf-8") as summary_file:
+            summary_file.write("\n".join(lines) + "\n")
+    except OSError:
+        print("Warning: could not write GitHub Actions step summary.", file=sys.stderr)
+
+
+def _markdown_cell(value: Any) -> str:
+    text = str(value).replace("|", "\\|").replace("\r", " ").replace("\n", " ")
+    return text.replace("<", "&lt;").replace(">", "&gt;")
 
 
 if __name__ == "__main__":

@@ -56,9 +56,10 @@ Prepare the pipeline for reliable, secure, and observable operation before enabl
 - [x] **Phase 7.5 (#18):** Harden AI input handling and generated application content.
   - Pass trusted directives as Gemini system instructions and serialize emails, job descriptions, analysis, and profile text as untrusted source data.
   - Fail closed when a structured grounding review is malformed, identifies unsupported claims, or lacks exact generated-claim and master-profile evidence quotations; cover these cases with automated tests.
-- [ ] **Phase 7.6 (#17):** Add production diagnostics and an operator runbook.
-  - Produce actionable per-run and per-job status, document retry/incident procedures, and make scheduled-run failures visible.
-  - Record enough information to troubleshoot without logging sensitive content.
+- [x] **Phase 7.6 (#17):** Add production diagnostics and an operator runbook.
+  - Add run IDs, UTC timestamps, duration, overall status, aggregate counts, and stage-level error records to CLI reports; redact unexpected startup details.
+  - Write a compact GitHub Actions step summary while retaining non-zero workflow exits for preflight and job failures.
+  - Document failure triage, retries, draft recovery, and safe verification in `RUNBOOK.md` without logging credentials, message bodies, or profile content.
 - [ ] **Phase 7.7 (#16):** Complete controlled live verification and pilot.
   - Verify dry-run against the configured Google/Gemini accounts, then run a small capped live pilot that creates drafts only.
   - Confirm generated documents, Gmail drafts, processed-state recovery, Telegram alerts, and that no email is sent; record results and rollback steps.

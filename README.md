@@ -154,6 +154,8 @@ The orchestrator processes up to `limits.max_jobs_per_run` messages per run. The
 
 `.github/workflows/run_agent.yml` runs daily at 08:00 UTC and supports manual runs from the repository's **Actions** tab. Configure the `GEMINI_API_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, and `GOOGLE_TOKEN_JSON` repository secrets first. Processing state is persisted to Google Drive and survives runner replacement and Actions cache eviction. Workflow runs are serialized across refs because they share one manifest. The manifest remains in the configured output folder until manually removed and grows by one compact record per handled Gmail message.
 
+Each CLI run emits a JSON report with a run ID, timestamps, duration, aggregate counts, outcome, and per-job error stage. GitHub Actions writes a compact summary and fails the workflow when a job or notification error is recorded. See [RUNBOOK.md](RUNBOOK.md) for triage, retry, and draft recovery procedures; inspect Gmail Drafts before retrying after a failure that may have occurred after draft creation.
+
 ---
 
 ## 📝 License
