@@ -37,7 +37,8 @@ ai_policy:
 
 # Google Drive / Docs интеграция
 google_docs:
-  master_resume_doc_id: "1e39ScAf0jdV74cxp8WvpIiAXBwMxvUfgWyeLCoNeDSY"
+  master_profile_doc_id: "1e39ScAf0jdV74cxp8WvpIiAXBwMxvUfgWyeLCoNeDSY"
+  resume_template_doc_id: "REPLACE_WITH_RESUME_TEMPLATE_DOC_ID"
   output_folder_id: "1fhZLdphKY6Gl1P-P01PPxSaqvonmr1R5"
 
 paths:

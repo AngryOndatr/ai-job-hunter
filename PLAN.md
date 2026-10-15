@@ -59,3 +59,7 @@ Prepare the pipeline for reliable, secure, and observable operation before enabl
 - [ ] **Phase 7.7 (#16):** Complete controlled live verification and pilot.
   - Verify dry-run against the configured Google/Gemini accounts, then run a small capped live pilot that creates drafts only.
   - Confirm generated documents, Gmail drafts, processed-state recovery, Telegram alerts, and that no email is sent; record results and rollback steps.
+- [ ] **Phase 7.8 (#23):** Separate factual profile source from resume output template.
+  - Code, configuration schema, tests, and migration docs are implemented; configure the separate template ID before live use.
+  - Read candidate facts from a dedicated master profile document and use a separate Google Doc as the output layout with replaceable placeholders.
+  - Complete and verify this migration before the Phase 7.7 live pilot.

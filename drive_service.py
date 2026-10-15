@@ -18,11 +18,12 @@ class GoogleDriveServiceError(RuntimeError):
 
 
 class GoogleDriveManager:
-    """Copy a Google Docs resume template, replace placeholders, and save a PDF.
+    """Read a factual profile and copy a separate resume template to generate a PDF.
 
     Template placeholders use double braces, for example `{{SUMMARY}}` and
     `{{EXPERIENCE}}`. The `tailored_sections` mapping may use either the full
-    placeholder or its bare name as a key.
+    placeholder or its bare name as a key. Only the template document is copied;
+    the profile document is used as source material for AI generation.
     """
 
     def __init__(
@@ -38,12 +39,23 @@ class GoogleDriveManager:
             raise FileNotFoundError(f"Could not read configuration file '{config_path}'.") from exc
 
         drive_config = config.get("google_docs", {})
-        self.template_id = drive_config.get("master_resume_doc_id")
+        self.profile_id = drive_config.get("master_profile_doc_id")
+        self.resume_template_id = drive_config.get("resume_template_doc_id")
         self.output_folder_id = drive_config.get("output_folder_id")
-        if not self.template_id or not self.output_folder_id:
+        if not self.profile_id or not self.resume_template_id or not self.output_folder_id:
             raise ValueError(
-                "config.yaml must define google_docs.master_resume_doc_id and "
-                "google_docs.output_folder_id."
+                "config.yaml must define google_docs.master_profile_doc_id, "
+                "google_docs.resume_template_doc_id, and google_docs.output_folder_id."
+            )
+        if self.profile_id == self.resume_template_id:
+            raise ValueError(
+                "google_docs.master_profile_doc_id and resume_template_doc_id "
+                "must refer to different Google Docs."
+            )
+        if self.resume_template_id == "REPLACE_WITH_RESUME_TEMPLATE_DOC_ID":
+            raise ValueError(
+                "Set google_docs.resume_template_doc_id to the ID of a separate "
+                "Google Docs resume template."
             )
 
         paths = config.get("paths", {})
@@ -82,7 +94,7 @@ class GoogleDriveManager:
         pdf_file = None
         try:
             document = self.drive.files().copy(
-                fileId=self.template_id,
+                fileId=self.resume_template_id,
                 body={"name": base_name, "parents": [self.output_folder_id]},
                 fields="id,name,mimeType,webViewLink",
                 supportsAllDrives=True,
@@ -155,20 +167,32 @@ class GoogleDriveManager:
                 f"Failed to create the tailored resume for {job_title!r}."
             ) from exc
 
-    def load_master_resume_profile(self) -> dict[str, Any]:
-        """Read the master Doc text and discover its double-brace placeholders."""
+    def load_master_profile(self) -> str:
+        """Read factual candidate information from the master profile document."""
         try:
-            document = self.docs.documents().get(documentId=self.template_id).execute()
+            document = self.docs.documents().get(documentId=self.profile_id).execute()
         except Exception as exc:
-            raise GoogleDriveServiceError("Failed to read the master resume Google Doc.") from exc
+            raise GoogleDriveServiceError("Failed to read the master profile Google Doc.") from exc
+
+        text = self._extract_document_text(document).strip()
+        if not text:
+            raise GoogleDriveServiceError("The master profile Google Doc contains no readable text.")
+        return text
+
+    def load_resume_template(self) -> dict[str, Any]:
+        """Read the output template and discover its double-brace placeholders."""
+        try:
+            document = self.docs.documents().get(documentId=self.resume_template_id).execute()
+        except Exception as exc:
+            raise GoogleDriveServiceError("Failed to read the resume template Google Doc.") from exc
 
         text = self._extract_document_text(document).strip()
         placeholders = list(dict.fromkeys(re.findall(r"\{\{\s*[A-Za-z0-9_ -]+\s*\}\}", text)))
         if not text:
-            raise GoogleDriveServiceError("The master resume Google Doc contains no readable text.")
+            raise GoogleDriveServiceError("The resume template Google Doc contains no readable text.")
         if not placeholders:
             raise GoogleDriveServiceError(
-                "The master resume Google Doc contains no {{PLACEHOLDER}} sections to tailor."
+                "The resume template Google Doc contains no {{PLACEHOLDER}} sections to tailor."
             )
         return {"text": text, "placeholders": placeholders}
 

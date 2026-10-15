@@ -23,8 +23,8 @@ The system adheres to a **Human-in-the-Loop** architecture: the agent automates 
 ## System Architecture Overview
 
 1. **Gmail Ingestion:** Scans targeted folders/labels for new job notification emails and filters out duplicates using `processed_ids.json`.
-2. **AI Job Analysis:** Google Gemini `gemini-3.8-flash` compares job requirements with the profile read from your master resume and applies the configured match threshold.
-3. **Document Generation:** Gemini tailors the template's `{{PLACEHOLDER}}` sections using profile evidence. The pipeline clones the master Google Doc, updates those sections, and exports a PDF.
+2. **AI Job Analysis:** Google Gemini `gemini-3.8-flash` compares job requirements with the factual master profile and applies the configured match threshold.
+3. **Document Generation:** Gemini tailors the resume template's `{{PLACEHOLDER}}` sections using profile evidence. The pipeline clones the separate template Google Doc, updates those sections, and exports a PDF.
 4. **Gmail Execution:** Creates a draft email in Gmail containing the cover letter and attached PDF resume.
 5. **Notification:** Sends an immediate digest alert with direct links via Telegram Bot.
 
@@ -82,7 +82,7 @@ pip install -r requirements.txt
 ### 2. Configure Parameters (config.yaml)
 1. Update config.yaml with your criteria:
 2. Specify target Gmail labels.
-3. Provide your Google Docs master resume template ID and target Google Drive output folder ID.
+3. Provide the Google Docs master profile ID, separate resume template ID, and target Google Drive output folder ID.
 4. Define technical keywords, blacklisted terms, and response language.
 
 ### 3. Google Workspace Credentials (credentials.json & token.json)
@@ -93,7 +93,11 @@ pip install -r requirements.txt
 5. При первом использовании Google APIs пройдите авторизацию в браузере. Приложение запрашивает Gmail read-only, Gmail compose, Google Drive и Google Docs scopes. Если `token.json` не содержит все необходимые scopes, повторная авторизация запустится автоматически.
 After re-authorization, update the GitHub secret `GOOGLE_TOKEN_JSON` with the new `token.json` content.
 
-The master resume template should contain double-brace placeholders for sections to replace, such as `{{SUMMARY}}` or `{{EXPERIENCE}}`. `drive_service.py` replaces these placeholders in a copy of the template and saves both the tailored Google Doc and exported PDF in the configured output folder.
+Configure two different Google Docs in `config.yaml`:
+- `google_docs.master_profile_doc_id` points to a factual source document containing the candidate's skills, career history, achievements, and baseline summary. Gemini reads this document for evidence; it is never copied into the generated resume.
+- `google_docs.resume_template_doc_id` points to the output layout. Put double-brace placeholders such as `{{SUMMARY}}`, `{{SKILLS}}`, or `{{EXPERIENCE}}` where generated sections should appear. `drive_service.py` copies this document, replaces its placeholders, and saves the tailored Google Doc and PDF in `google_docs.output_folder_id`.
+
+The profile and template IDs must refer to different documents. To migrate from the previous single-document setup, keep the old `master_resume_doc_id` value as `master_profile_doc_id`, create or choose a separate Google Docs resume layout with placeholders, and set its ID as `resume_template_doc_id`. The sample config contains a `REPLACE_WITH_RESUME_TEMPLATE_DOC_ID` marker that must be replaced before running the pipeline.
 
 `gmail_executor.py` creates a Gmail draft from the generated cover letter and PDF. Job data must include an explicit application address in `application_email` or `recipient`; the sender of a job alert is never treated as the employer's application address. The executor creates drafts only and does not send email.
 

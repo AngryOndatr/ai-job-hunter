@@ -57,13 +57,13 @@ def run_pipeline(
     draft_executor = draft_executor or GmailDraftExecutor(config_path=config_path)
     notifier = notifier or TelegramNotifier()
 
-    profile = drive_manager.load_master_resume_profile()
-    master_profile = profile.get("text")
-    placeholders = profile.get("placeholders")
+    master_profile = drive_manager.load_master_profile()
+    template = drive_manager.load_resume_template()
+    placeholders = template.get("placeholders")
     if not isinstance(master_profile, str) or not master_profile.strip():
-        raise ValueError("The master resume profile is empty or invalid.")
+        raise ValueError("The factual master profile is empty or invalid.")
     if not isinstance(placeholders, list) or not placeholders:
-        raise ValueError("The master resume has no replaceable sections.")
+        raise ValueError("The resume template has no replaceable sections.")
 
     for job in batch:
         message_id = job.get("id") if isinstance(job, Mapping) else None

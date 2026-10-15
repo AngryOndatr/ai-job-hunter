@@ -9,7 +9,7 @@ The system operates on a **Human-in-the-Loop** model: the agent automates all te
 `main.py` orchestrates these steps:
 
 1. `GmailJobCollector` fetches unseen messages from configured Gmail labels.
-2. `GoogleDriveManager` reads the master Google Doc text and discovers its `{{PLACEHOLDER}}` sections.
+2. `GoogleDriveManager` reads factual candidate information from the master profile Google Doc and discovers `{{PLACEHOLDER}}` sections in the separate resume template.
 3. `GeminiJobAnalyzer` scores each job against the profile and, for eligible jobs, generates tailored resume sections and a cover letter.
 4. `GoogleDriveManager` copies the template, replaces the requested sections, and exports a PDF.
 5. `GmailDraftExecutor` creates a draft with the cover letter and PDF attachment.
@@ -21,7 +21,7 @@ The system reads processing settings from `config.yaml`:
 
 - **Gmail settings:** target labels, maximum message age, and `processed_ids.json` path. During orchestration, IDs are acknowledged after a job is skipped or a draft is created; failures before draft creation remain eligible for retry.
 - **AI policy:** model, response language, and minimum score (`min_match_score_to_draft`).
-- **Google Docs:** master resume document ID and output folder ID.
+- **Google Docs:** factual master profile document ID, separate resume template document ID, and output folder ID.
 - **Run limit:** `limits.max_jobs_per_run` caps jobs attempted in one run.
 - `filters.keywords` and `filters.blacklisted_keywords` are present in the configuration but are not currently applied by `GmailJobCollector` or `main.py`.
 
@@ -40,7 +40,7 @@ The system reads processing settings from `config.yaml`:
 
 ## Pipeline Behavior
 
-- The master profile is read from the configured Google Doc. The document must contain one or more double-brace placeholders such as `{{SUMMARY}}` or `{{EXPERIENCE}}` for sections to tailor.
+- Candidate facts are read from `google_docs.master_profile_doc_id`. The generated resume is copied from the separate `google_docs.resume_template_doc_id`, which must contain one or more double-brace placeholders such as `{{SUMMARY}}` or `{{EXPERIENCE}}`. The IDs must be different; profile-only content is never copied into the output document.
 - A job is eligible only when its match score meets `ai_policy.min_match_score_to_draft`.
 - A Gmail draft requires an explicit `application_email` or `recipient` value in the job mapping. The job alert's `sender` is never treated as the application address. Jobs without a recipient are reported as skipped.
 - Jobs that fail before draft creation are not marked processed and can be retried. After a draft is created, the message ID is persisted before Telegram notification to avoid creating duplicate drafts if Telegram is unavailable; the run report includes the draft URL when notification fails.
@@ -49,8 +49,10 @@ The system reads processing settings from `config.yaml`:
 
 ## 🔑 Required Credentials and Token Acquisition
 
-1. **Google Drive template ID and folder ID (`config.yaml`)**
-   - Open your master resume in Google Docs and copy its ID from the URL: `/document/d/YOUR_TEMPLATE_ID/edit`. Set `google_docs.master_resume_doc_id` in `config.yaml`.
+1. **Google Docs profile, resume template, and output folder IDs (`config.yaml`)**
+   - Set `google_docs.master_profile_doc_id` to the Google Doc containing factual skills, career history, achievements, and baseline summary.
+   - Set `google_docs.resume_template_doc_id` to a different Google Doc containing the final resume layout and double-brace placeholders.
+   - Set `google_docs.output_folder_id` to the destination folder. The older `master_resume_doc_id` setting must be migrated: retain its document as the profile source and provide a separate output template ID.
    - Open the export folder in Google Drive and copy its ID from the URL: `/drive/folders/YOUR_FOLDER_ID`. Set `google_docs.output_folder_id` in `config.yaml`.
 2. **Google OAuth credentials (`credentials.json` and `token.json`)**
    - In Google Cloud Console, enable **Gmail API**, **Google Drive API**, and **Google Docs API**.

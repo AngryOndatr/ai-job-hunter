@@ -17,7 +17,8 @@ class GoogleDriveManagerTests(unittest.TestCase):
             yaml.safe_dump(
                 {
                     "google_docs": {
-                        "master_resume_doc_id": "template-id",
+                        "master_profile_doc_id": "profile-id",
+                        "resume_template_doc_id": "template-id",
                         "output_folder_id": "output-folder-id",
                     },
                     "paths": {
@@ -59,14 +60,21 @@ class GoogleDriveManagerTests(unittest.TestCase):
             docs_service=self.docs,
         )
 
-    def test_loads_master_profile_and_discovers_placeholders_in_document_content(self):
-        self.docs.documents.return_value.get.return_value.execute.return_value = {
+    def test_loads_profile_and_template_from_separate_documents(self):
+        profile_document = {
+            "body": {
+                "content": [
+                    {"paragraph": {"elements": [{"textRun": {"content": "FACTUAL PROFILE TEXT\n"}}]}}
+                ]
+            }
+        }
+        template_document = {
             "body": {
                 "content": [
                     {
                         "paragraph": {
                             "elements": [
-                                {"textRun": {"content": "Profile text\n{{SUMMARY}}\n"}},
+                                {"textRun": {"content": "Template layout\n{{SUMMARY}}\n"}},
                             ]
                         }
                     },
@@ -94,14 +102,50 @@ class GoogleDriveManagerTests(unittest.TestCase):
                 ]
             }
         }
+        self.docs.documents.return_value.get.return_value.execute.side_effect = [
+            profile_document,
+            template_document,
+        ]
 
-        result = self.manager.load_master_resume_profile()
+        profile = self.manager.load_master_profile()
+        template = self.manager.load_resume_template()
 
-        self.assertIn("Profile text", result["text"])
-        self.assertEqual(result["placeholders"], ["{{SUMMARY}}", "{{EXPERIENCE}}"])
-        self.docs.documents.return_value.get.assert_called_once_with(
-            documentId="template-id"
+        self.assertEqual(profile, "FACTUAL PROFILE TEXT")
+        self.assertIn("Template layout", template["text"])
+        self.assertEqual(template["placeholders"], ["{{SUMMARY}}", "{{EXPERIENCE}}"])
+        self.assertEqual(
+            self.docs.documents.return_value.get.call_args_list,
+            [
+                unittest.mock.call(documentId="profile-id"),
+                unittest.mock.call(documentId="template-id"),
+            ],
         )
+
+    def test_rejects_same_document_for_profile_and_output_template(self):
+        config = yaml.safe_load(self.config_path.read_text(encoding="utf-8"))
+        config["google_docs"]["resume_template_doc_id"] = "profile-id"
+        self.config_path.write_text(yaml.safe_dump(config), encoding="utf-8")
+
+        with self.assertRaisesRegex(ValueError, "different Google Docs"):
+            GoogleDriveManager(
+                config_path=str(self.config_path),
+                drive_service=self.drive,
+                docs_service=self.docs,
+            )
+
+    def test_requires_configured_separate_resume_template_id(self):
+        config = yaml.safe_load(self.config_path.read_text(encoding="utf-8"))
+        config["google_docs"]["resume_template_doc_id"] = (
+            "REPLACE_WITH_RESUME_TEMPLATE_DOC_ID"
+        )
+        self.config_path.write_text(yaml.safe_dump(config), encoding="utf-8")
+
+        with self.assertRaisesRegex(ValueError, "Set google_docs.resume_template_doc_id"):
+            GoogleDriveManager(
+                config_path=str(self.config_path),
+                drive_service=self.drive,
+                docs_service=self.docs,
+            )
 
     def test_copies_replaces_exports_and_saves_pdf(self):
         result = self.manager.create_tailored_resume(

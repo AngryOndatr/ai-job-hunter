@@ -38,8 +38,9 @@ class PipelineTests(unittest.TestCase):
         }
         self.analyzer.generate_cover_letter.return_value = "Dear Hiring Team, ..."
         self.drive = Mock()
-        self.drive.load_master_resume_profile.return_value = {
-            "text": "Java engineer profile {{SUMMARY}}",
+        self.drive.load_master_profile.return_value = "Java engineer factual profile"
+        self.drive.load_resume_template.return_value = {
+            "text": "Output template {{SUMMARY}}",
             "placeholders": ["{{SUMMARY}}"],
         }
         self.drive.create_tailored_resume.return_value = {
@@ -73,12 +74,14 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(report["errors"], [])
         self.assertEqual(report["skipped"], [])
         self.collector.fetch_new_job_emails.assert_called_once_with(defer_processed=True)
+        self.drive.load_master_profile.assert_called_once_with()
+        self.drive.load_resume_template.assert_called_once_with()
         self.analyzer.analyze_job.assert_called_once_with(
-            self.job, "Java engineer profile {{SUMMARY}}"
+            self.job, "Java engineer factual profile"
         )
         self.analyzer.generate_tailored_sections.assert_called_once_with(
             self.job,
-            "Java engineer profile {{SUMMARY}}",
+            "Java engineer factual profile",
             self.analyzer.analyze_job.return_value,
             ["{{SUMMARY}}"],
         )
