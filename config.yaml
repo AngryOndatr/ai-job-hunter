@@ -1,50 +1,48 @@
-# ⚙️ AI Job Hunter Configuration (config.yaml)
+# ⚙️ AI Job Hunter Configuration
 
-# Настройки сканирования почты Gmail
 gmail:
   target_labels:
     - "Glassdoor"
     - "LinkedIn"
     - "Michael Page"
     - "Stepstone.de"
-  
-  # Максимальный возраст писем для обработки (в днях)
-  max_letter_age_days: 2
+  max_email_age_days: 2
+  processed_ids_file: "processed_ids.json"
 
-  # Ключевые слова на основе вашего стека (Java / Spring Boot / Full-Stack)
-  keywords_filter:
+filters:
+  keywords:
     - "Java"
     - "Spring Boot"
     - "Full-Stack"
-    - "Backend"
-    - "Software Developer"
-    - "Software Engineer"
+    - "Microservices"
     - "Angular"
     - "TypeScript"
-    - "Healthcare"
-    - "Microservices"
-
-# Настройки генерации ИИ и языковая политика
-ai_settings:
-  # Основной язык для генерации писем (en - English C1)
-  response_language: "en" 
-  
-  # Порог отсечения релевантности (0-100)
-  min_match_score_to_draft: 65
-
-  # Стоп-слова для отфильтровывания ненужных позиций
+    - "Software Developer"
+    - "Software Engineer"
+    - "Senior Software Developer"
+    - "Senior Software Engineer"
   blacklisted_keywords:
-    - "Junior"
-    - "Intern"
     - "PHP"
     - "Ruby"
     - "Python Developer"
-    - "On-site mandatory"
+    - "Senior Manager"
+    - "Lead Architect"
+    - "Intern"
+
+ai_policy:
+  language: "en"
+  provider: "google"
+  model: "gemini-3.8-flash"
+  min_match_score_to_draft: 75  # Минимальный балл совпадения для создания черновика
 
 # Google Drive / Docs интеграция
 google_docs:
-  master_resume_doc_id: "your_google_doc_id_here"
-  output_folder_id: "your_google_drive_folder_id_here"
+  master_resume_doc_id: "1e39ScAf0jdV74cxp8WvpIiAXBwMxvUfgWyeLCoNeDSY"
+  output_folder_id: "1fhZLdphKY6Gl1P-P01PPxSaqvonmr1R5"
+
+paths:
+  credentials_file: "credentials.json"
+  token_file: "token.json"
 
 # Лимиты обработки за один запуск
 limits:

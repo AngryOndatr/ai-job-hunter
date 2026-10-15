@@ -1,26 +1,20 @@
-# Virtual Environment
-venv/
-.venv/
-env/
-
-# Python & Byte-code
+# Python cache
 __pycache__/
 *.py[cod]
 *$py.class
-.pytest_cache/
+venv/
+.venv/
 
-# IDE (IntelliJ IDEA / PyCharm / VS Code)
+# Environment variables & Secrets (Local overrides)
+.env
+credentials.json
+token.json
+
+# Runtime tracking & State files
+processed_ids.json
+tmp.txt
+
+# IDE configuration
 .idea/
 .vscode/
 *.iml
-
-# Secrets & Google Credentials (ÊÐÈÒÈ×ÅÑÊÈ ÂÀÆÍÎ)
-credentials.json
-token.json
-.env
-
-# Local databases / generated files
-processed_ids.json
-*.pdf
-*.log
-downloads/
