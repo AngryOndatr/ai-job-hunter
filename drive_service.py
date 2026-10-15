@@ -254,7 +254,8 @@ class GoogleDriveManager:
         """Save tailored resume and cover letter Docs/PDFs under the company folder."""
         if not isinstance(cover_letter, str) or not cover_letter.strip():
             raise ValueError("cover_letter must be non-empty text.")
-        folder_id = self.get_or_create_company_folder(job)
+        folder_key = f"{idempotency_key}-company"
+        folder_id = self.get_or_create_company_folder(job, idempotency_key=folder_key)
         resume = self.create_tailored_resume(
             job_title,
             tailored_sections,
@@ -266,23 +267,49 @@ class GoogleDriveManager:
             job_title, cover_letter, folder_id,
             idempotency_key=f"{idempotency_key}-cover-letter",
         )
-        return {"folder": {"id": folder_id}, "resume": resume, "cover_letter": cover}
+        return {
+            "folder": {"id": folder_id},
+            "resume": resume,
+            "cover_letter": cover,
+            "idempotency_keys": {
+                "company_folder": folder_key,
+                "resume": f"{idempotency_key}-resume",
+                "cover_letter": f"{idempotency_key}-cover-letter",
+            },
+        }
 
-    def get_or_create_company_folder(self, job: Mapping[str, Any]) -> str:
+    def get_or_create_company_folder(
+        self, job: Mapping[str, Any], *, idempotency_key: str | None = None
+    ) -> str:
         """Find or create a safely named company folder beneath the output folder."""
         name = self._company_folder_name(job)
         escaped_name = name.replace("\\", "\\\\").replace("'", "\\'")
-        response = self.drive.files().list(
-            q=(
-                f"'{self.output_folder_id}' in parents and name = '{escaped_name}' "
-                "and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
-            ),
-            pageSize=10,
-            fields="files(id,name)",
-            supportsAllDrives=True,
-            includeItemsFromAllDrives=True,
-        ).execute()
-        folders = response.get("files", [])
+        folders = []
+        if idempotency_key:
+            response = self.drive.files().list(
+                q=(
+                    f"'{self.output_folder_id}' in parents and trashed = false and "
+                    "appProperties has { "
+                    f"key='aiJobHunterCompanyKey' and value='{idempotency_key}' }}"
+                ),
+                pageSize=10,
+                fields="files(id,name)",
+                supportsAllDrives=True,
+                includeItemsFromAllDrives=True,
+            ).execute()
+            folders = response.get("files", [])
+        if not folders:
+            response = self.drive.files().list(
+                q=(
+                    f"'{self.output_folder_id}' in parents and name = '{escaped_name}' "
+                    "and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
+                ),
+                pageSize=10,
+                fields="files(id,name)",
+                supportsAllDrives=True,
+                includeItemsFromAllDrives=True,
+            ).execute()
+            folders = response.get("files", [])
         if len(folders) > 1:
             raise GoogleDriveServiceError("Multiple company folders have the same name.")
         if folders:
@@ -292,6 +319,11 @@ class GoogleDriveManager:
                 "name": name,
                 "mimeType": "application/vnd.google-apps.folder",
                 "parents": [self.output_folder_id],
+                **(
+                    {"appProperties": {"aiJobHunterCompanyKey": idempotency_key}}
+                    if idempotency_key
+                    else {}
+                ),
             },
             fields="id,name",
             supportsAllDrives=True,

@@ -45,6 +45,30 @@ class TelegramNotifierTests(unittest.TestCase):
         self.assertIn(self.draft["url"], message)
         self.assertNotIn(self.token, message)
 
+    def test_sends_document_only_notification_with_both_drive_links(self):
+        resume_url = "https://drive.google.com/file/d/resume-pdf/view"
+        cover_letter_url = "https://drive.google.com/file/d/letter-pdf/view"
+
+        result = self.notifier.send_document_only_notification(
+            self.job, resume_url, cover_letter_url
+        )
+
+        self.assertEqual(result, {"message_id": 321, "chat_id": "987654"})
+        message = self.session.post.call_args.kwargs["json"]["text"]
+        self.assertIn(resume_url, message)
+        self.assertIn(cover_letter_url, message)
+        self.assertNotIn("Gmail draft", message)
+
+    def test_rejects_non_google_links_for_document_only_notification(self):
+        with self.assertRaisesRegex(ValueError, "Google Drive HTTPS"):
+            self.notifier.send_document_only_notification(
+                self.job,
+                "https://example.com/resume.pdf",
+                "https://drive.google.com/file/d/letter/view",
+            )
+
+        self.session.post.assert_not_called()
+
     def test_requires_bot_token_and_chat_id(self):
         with patch.dict(os.environ, {"TELEGRAM_BOT_TOKEN": "", "TELEGRAM_CHAT_ID": ""}):
             with self.assertRaisesRegex(ValueError, "TELEGRAM_BOT_TOKEN"):

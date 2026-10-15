@@ -104,6 +104,47 @@ class ProcessingStateTests(unittest.TestCase):
         })
         self.assertEqual(store.get_terminal_ids(), {"gmail-low-match"})
 
+    def test_document_only_application_is_terminal_only_after_notification_succeeds(self):
+        store = self.make_store()
+        store.state["jobs"] = {
+            "gmail-notified": {
+                "status": "document_only_created",
+                "notification_status": "sent",
+            },
+            "gmail-notification-pending": {
+                "status": "document_only_created",
+                "notification_status": "failed",
+            },
+            "gmail-artifact-pending": {"status": "document_only_pending"},
+        }
+
+        self.assertEqual(store.get_terminal_ids(), {"gmail-notified"})
+        self.assertEqual(
+            store.get_reprocessable_ids(),
+            {"gmail-notification-pending", "gmail-artifact-pending"},
+        )
+
+    def test_persists_document_only_artifact_ids_links_and_idempotency_metadata(self):
+        store = self.make_store()
+
+        store.mark_status(
+            "gmail-doc-only",
+            "document_only_created",
+            document_only_idempotency_key="stable-job-key",
+            company_folder_key="stable-company-key",
+            company_folder_id="folder-id",
+            resume_document_id="resume-doc-id",
+            resume_pdf_id="resume-pdf-id",
+            resume_pdf_link="https://drive.google.com/file/d/resume/view",
+            cover_letter_document_id="letter-doc-id",
+            cover_letter_pdf_id="letter-pdf-id",
+            cover_letter_pdf_link="https://drive.google.com/file/d/letter/view",
+            notification_status="pending",
+        )
+
+        self.assertEqual(store.get_job_state("gmail-doc-only")["status"], "document_only_created")
+        self.drive.files.return_value.create.assert_called_once()
+
 
 if __name__ == "__main__":
     unittest.main()

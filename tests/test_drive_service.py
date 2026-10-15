@@ -282,6 +282,39 @@ class GoogleDriveManagerTests(unittest.TestCase):
         self.assertEqual(folder_id, "company-folder-id")
         self.drive.files.return_value.create.assert_not_called()
 
+    def test_new_company_folder_has_deterministic_idempotency_property(self):
+        self.drive.files.return_value.list.return_value.execute.return_value = {"files": []}
+
+        self.manager.get_or_create_company_folder(
+            {"company": "Example GmbH"}, idempotency_key="company-key"
+        )
+
+        body = self.drive.files.return_value.create.call_args.kwargs["body"]
+        self.assertEqual(
+            body["appProperties"], {"aiJobHunterCompanyKey": "company-key"}
+        )
+
+    def test_reuses_existing_cover_letter_doc_and_pdf_after_interruption(self):
+        self.drive.files.return_value.list.return_value.execute.side_effect = [
+            {"files": [{"id": "cover-doc-id", "name": "Cover Letter"}]},
+            {"files": [{"id": "cover-pdf-id", "name": "Cover Letter.pdf"}]},
+        ]
+        self.drive.files.return_value.update.return_value.execute.return_value = {
+            "id": "cover-pdf-id", "name": "Cover Letter.pdf"
+        }
+
+        result = self.manager._create_cover_letter(
+            "Engineer",
+            "Dear Hiring Team",
+            "company-folder-id",
+            idempotency_key="stable-cover-key",
+        )
+
+        self.assertEqual(result["document"]["id"], "cover-doc-id")
+        self.assertEqual(result["pdf"]["id"], "cover-pdf-id")
+        self.drive.files.return_value.create.assert_not_called()
+        self.docs.documents.return_value.batchUpdate.assert_not_called()
+
     def test_company_folder_name_is_sanitized_and_has_deterministic_fallback(self):
         self.assertEqual(
             self.manager._company_folder_name({"company": "../Acme/\x00 GmbH"}),
@@ -326,6 +359,14 @@ class GoogleDriveManagerTests(unittest.TestCase):
         self.assertEqual(result["resume"]["pdf"]["id"], "resume-pdf-id")
         self.assertEqual(result["cover_letter"]["document"]["id"], "cover-doc-id")
         self.assertEqual(result["cover_letter"]["pdf"]["id"], "cover-pdf-id")
+        self.assertEqual(
+            result["idempotency_keys"],
+            {
+                "company_folder": "stable-key-company",
+                "resume": "stable-key-resume",
+                "cover_letter": "stable-key-cover-letter",
+            },
+        )
         self.assertEqual(self.drive.files.return_value.export.call_count, 2)
         self.docs.documents.return_value.batchUpdate.assert_any_call(
             documentId="cover-doc-id",

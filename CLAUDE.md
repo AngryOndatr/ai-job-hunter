@@ -89,6 +89,6 @@ Configure these secrets under **Settings → Secrets and variables → Actions**
 - Requires the `GEMINI_API_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, and `GOOGLE_TOKEN_JSON` repository secrets.
 - Writes the Google token from the environment without echoing its contents to the log.
 - Stores the durable processing manifest in Google Drive, independent of the GitHub Actions cache and runner lifetime.
-- Tracks jobs through `processing`, `resume_pending`, `resume_created`, `draft_pending`, `draft_created`, and `skipped`. Drive artifacts and pending Gmail drafts use deterministic idempotency keys so an interrupted run reuses existing artifacts.
+- Tracks jobs through `processing`, `resume_pending`, `resume_created`, `draft_pending`, `draft_created`, `document_only_pending`, `document_only_created`, and `skipped`. Drive artifacts and pending Gmail drafts use deterministic idempotency keys so an interrupted run reuses existing artifacts. Document-only jobs become terminal after the Telegram notification succeeds; notification retries reuse saved links.
 - Stores only message/document/draft IDs, status, timestamps, and notification status; do not add job content or recipient details to the manifest.
 - Serializes workflow runs across refs because all runs share the same Drive manifest.

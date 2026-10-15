@@ -13,7 +13,7 @@ class TelegramNotificationError(RuntimeError):
 
 
 class TelegramNotifier:
-    """Send a concise job summary with a link to its Gmail draft."""
+    """Send concise job notifications with Gmail draft or Drive artifact links."""
 
     API_BASE_URL = "https://api.telegram.org"
     MAX_MESSAGE_LENGTH = 4096
@@ -41,6 +41,38 @@ class TelegramNotifier:
     ) -> dict[str, Any]:
         """Send a Telegram message and return its message ID and chat ID."""
         text = self._build_message(job, job_analysis, draft)
+        return self._send_text(text)
+
+    def send_document_only_notification(
+        self, job: Mapping[str, Any], resume_url: str, cover_letter_url: str
+    ) -> dict[str, Any]:
+        """Notify the user that document-only application files are ready."""
+        if not isinstance(job, Mapping):
+            raise TypeError("job must be a mapping containing job details.")
+        title = job.get("job_title") or job.get("title") or job.get("subject")
+        if not isinstance(title, str) or not title.strip():
+            raise ValueError("Job data must include a job_title, title, or subject.")
+        for link_name, link in (
+            ("resume_url", resume_url),
+            ("cover_letter_url", cover_letter_url),
+        ):
+            if not isinstance(link, str) or not link.startswith(
+                ("https://drive.google.com/", "https://docs.google.com/")
+            ):
+                raise ValueError(f"{link_name} must be a Google Drive HTTPS link.")
+        lines = ["Application materials ready", f"Position: {title.strip()}"]
+        employer = job.get("employer") or job.get("company")
+        if isinstance(employer, str) and employer.strip():
+            lines.append(f"Company: {employer.strip()}")
+        lines.extend([f"Resume (PDF): {resume_url}", f"Cover letter (PDF): {cover_letter_url}"])
+        text = "\n".join(lines)
+        if len(text) > self.MAX_MESSAGE_LENGTH:
+            raise ValueError(
+                f"Notification is longer than Telegram's {self.MAX_MESSAGE_LENGTH}-character limit."
+            )
+        return self._send_text(text)
+
+    def _send_text(self, text: str) -> dict[str, Any]:
         endpoint = f"{self.API_BASE_URL}/bot{self.bot_token}/sendMessage"
 
         try:

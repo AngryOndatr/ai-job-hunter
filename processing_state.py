@@ -21,18 +21,29 @@ class GoogleDriveProcessingState:
 
     FILE_NAME = "ai-job-hunter-processing-state.json"
     VERSION = 1
-    TERMINAL_STATUSES = {"skipped", "draft_created"}
+    TERMINAL_STATUSES = {"skipped", "draft_created", "document_only_created"}
     VALID_STATUSES = TERMINAL_STATUSES | {
         "processing",
         "resume_pending",
         "resume_created",
         "draft_pending",
+        "document_only_pending",
     }
     METADATA_FIELDS = {
         "reason",
         "resume_document_id",
         "resume_pdf_id",
         "resume_idempotency_key",
+        "document_only_idempotency_key",
+        "company_folder_key",
+        "company_folder_id",
+        "cover_letter_idempotency_key",
+        "cover_letter_document_id",
+        "cover_letter_pdf_id",
+        "resume_document_link",
+        "resume_pdf_link",
+        "cover_letter_document_link",
+        "cover_letter_pdf_link",
         "draft_message_id",
         "draft_id",
         "draft_url",
@@ -77,7 +88,13 @@ class GoogleDriveProcessingState:
         return {
             message_id
             for message_id, record in self.state["jobs"].items()
-            if record.get("status") in self.TERMINAL_STATUSES
+            if (
+                record.get("status") in self.TERMINAL_STATUSES
+                and not (
+                    record.get("status") == "document_only_created"
+                    and record.get("notification_status") != "sent"
+                )
+            )
             and not (
                 record.get("status") == "skipped"
                 and record.get("reason") == "missing_application_recipient"
@@ -89,7 +106,13 @@ class GoogleDriveProcessingState:
         return {
             message_id
             for message_id, record in self.state["jobs"].items()
-            if record.get("status") not in self.TERMINAL_STATUSES
+            if (
+                record.get("status") not in self.TERMINAL_STATUSES
+                or (
+                    record.get("status") == "document_only_created"
+                    and record.get("notification_status") != "sent"
+                )
+            )
             or (
                 record.get("status") == "skipped"
                 and record.get("reason") == "missing_application_recipient"

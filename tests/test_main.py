@@ -74,6 +74,17 @@ class PipelineTests(unittest.TestCase):
             "pdf_bytes": b"%PDF-mock",
             "pdf": {"name": "Resume.pdf"},
         }
+        self.drive.create_document_only_application.return_value = {
+            "folder": {"id": "company-folder-id"},
+            "resume": {
+                "document": {"id": "resume-doc-id", "webViewLink": "https://docs.google.com/document/d/resume/edit"},
+                "pdf": {"id": "resume-pdf-id", "webViewLink": "https://drive.google.com/file/d/resume/view"},
+            },
+            "cover_letter": {
+                "document": {"id": "letter-doc-id", "webViewLink": "https://docs.google.com/document/d/letter/edit"},
+                "pdf": {"id": "letter-pdf-id", "webViewLink": "https://drive.google.com/file/d/letter/view"},
+            },
+        }
         self.draft_executor = Mock()
         self.draft_executor.idempotency_message_id.side_effect = (
             GmailDraftExecutor.idempotency_message_id
@@ -214,7 +225,7 @@ class PipelineTests(unittest.TestCase):
             [{"job_id": "gmail-message-1", "title": "Senior Java Engineer"}],
         )
 
-    def test_missing_recipient_creates_document_only_application_without_marking_processed(self):
+    def test_missing_recipient_creates_notifies_and_acknowledges_document_only_application(self):
         second_job = {**self.job, "id": "gmail-message-2", "application_email": ""}
         self.collector.fetch_new_job_emails.return_value = [self.job, second_job]
         self.analyzer.analyze_job.side_effect = [
@@ -232,7 +243,10 @@ class PipelineTests(unittest.TestCase):
         )
         self.assertEqual(
             self.collector.mark_processed.call_args_list,
-            [unittest.mock.call("gmail-message-1")],
+            [
+                unittest.mock.call("gmail-message-1"),
+                unittest.mock.call("gmail-message-2"),
+            ],
         )
         self.assertEqual(report["errors"], [])
         self.drive.create_document_only_application.assert_called_once()
@@ -261,6 +275,40 @@ class PipelineTests(unittest.TestCase):
         draft_factory.assert_not_called()
         self.assertEqual(report["errors"], [])
         self.drive.create_document_only_application.assert_called_once()
+
+    def test_document_only_notification_failure_retries_from_saved_links_without_regenerating(self):
+        self.job["application_email"] = ""
+        self.notifier.send_document_only_notification.side_effect = RuntimeError(
+            "Telegram unavailable"
+        )
+
+        first_report = self.run_with_components()
+
+        self.assertEqual(first_report["errors"][0]["stage"], "telegram_notification")
+        self.assertEqual(first_report["document_applications_created"], 1)
+        self.state_store.mark_status.assert_any_call(
+            "gmail-message-1", "document_only_created", notification_status="failed"
+        )
+
+        self.state_store.get_job_state.return_value = {
+            "status": "document_only_created",
+            "notification_status": "failed",
+            "resume_pdf_link": "https://drive.google.com/file/d/resume/view",
+            "cover_letter_pdf_link": "https://drive.google.com/file/d/letter/view",
+        }
+        self.analyzer.reset_mock()
+        self.drive.create_document_only_application.reset_mock()
+        self.notifier.send_document_only_notification.side_effect = None
+        self.collector.mark_processed.reset_mock()
+
+        retry_report = self.run_with_components()
+
+        self.assertEqual(retry_report["errors"], [])
+        self.assertEqual(retry_report["notifications_sent"], 1)
+        self.assertEqual(retry_report["document_applications_created"], 1)
+        self.analyzer.analyze_job.assert_not_called()
+        self.drive.create_document_only_application.assert_not_called()
+        self.collector.mark_processed.assert_called_once_with("gmail-message-1")
 
     def test_continues_after_a_job_failure_and_retries_failed_job_next_run(self):
         second_job = {**self.job, "id": "gmail-message-2", "subject": "Backend Engineer"}

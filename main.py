@@ -121,8 +121,51 @@ def run_pipeline(
 
             prior_state = state_store.get_job_state(message_id) if not dry_run else None
             pending_key = (prior_state or {}).get("draft_message_id")
+            recipient = _application_recipient(job)
             if not dry_run and (prior_state or {}).get("status") != "draft_pending":
                 state_store.mark_status(message_id, "processing")
+
+            if (
+                not dry_run
+                and not recipient
+                and (prior_state or {}).get("status") == "document_only_created"
+                and (prior_state or {}).get("notification_status") != "sent"
+                and (prior_state or {}).get("resume_pdf_link")
+                and (prior_state or {}).get("cover_letter_pdf_link")
+            ):
+                stage = "telegram_notification"
+                report["document_applications_created"] += 1
+                try:
+                    notifier.send_document_only_notification(
+                        job,
+                        prior_state["resume_pdf_link"],
+                        prior_state["cover_letter_pdf_link"],
+                    )
+                    state_store.mark_status(
+                        message_id,
+                        "document_only_created",
+                        notification_status="sent",
+                    )
+                    report["notifications_sent"] += 1
+                except Exception as exc:
+                    state_store.mark_status(
+                        message_id,
+                        "document_only_created",
+                        notification_status="failed",
+                    )
+                    report["errors"].append(
+                        _error_record(message_id, title, stage, exc)
+                    )
+                else:
+                    try:
+                        collector.mark_processed(message_id)
+                    except Exception as exc:
+                        report["errors"].append(
+                            _error_record(
+                                message_id, title, "processed_id_persistence", exc
+                            )
+                        )
+                continue
 
             print(f"Job {job_index}/{len(batch)}: Gemini analysis.", flush=True)
             analysis = analyzer.analyze_job(job, master_profile)
@@ -135,7 +178,6 @@ def run_pipeline(
                 )
                 continue
 
-            recipient = _application_recipient(job)
             if recipient and not dry_run and draft_executor is None:
                 preflight_google_oauth(config, require_gmail_compose=True)
                 draft_executor = GmailDraftExecutor(config_path=config_path)
@@ -198,8 +240,16 @@ def run_pipeline(
                 drive_key = "ai-job-hunter-" + hashlib.sha256(
                     message_id.encode("utf-8")
                 ).hexdigest()
+                company_folder_key = f"{drive_key}-company"
+                resume_key = f"{drive_key}-resume"
+                cover_letter_key = f"{drive_key}-cover-letter"
                 state_store.mark_status(
-                    message_id, "resume_pending", resume_idempotency_key=drive_key
+                    message_id,
+                    "document_only_pending",
+                    document_only_idempotency_key=drive_key,
+                    company_folder_key=company_folder_key,
+                    resume_idempotency_key=resume_key,
+                    cover_letter_idempotency_key=cover_letter_key,
                 )
                 application_documents = drive_manager.create_document_only_application(
                     job,
@@ -210,16 +260,66 @@ def run_pipeline(
                 )
                 state_store.mark_status(
                     message_id,
-                    "resume_created",
+                    "document_only_created",
+                    company_folder_id=str((application_documents.get("folder") or {}).get("id", "")),
                     resume_document_id=str(
                         ((application_documents.get("resume") or {}).get("document") or {}).get("id", "")
                     ),
                     resume_pdf_id=str(
                         ((application_documents.get("resume") or {}).get("pdf") or {}).get("id", "")
                     ),
-                    resume_idempotency_key=drive_key,
+                    cover_letter_document_id=str(
+                        ((application_documents.get("cover_letter") or {}).get("document") or {}).get("id", "")
+                    ),
+                    cover_letter_pdf_id=str(
+                        ((application_documents.get("cover_letter") or {}).get("pdf") or {}).get("id", "")
+                    ),
+                    resume_document_link=str(
+                        (((application_documents.get("resume") or {}).get("document") or {}).get("webViewLink", ""))
+                    ),
+                    resume_pdf_link=str(
+                        (((application_documents.get("resume") or {}).get("pdf") or {}).get("webViewLink", ""))
+                    ),
+                    cover_letter_document_link=str(
+                        (((application_documents.get("cover_letter") or {}).get("document") or {}).get("webViewLink", ""))
+                    ),
+                    cover_letter_pdf_link=str(
+                        (((application_documents.get("cover_letter") or {}).get("pdf") or {}).get("webViewLink", ""))
+                    ),
+                    notification_status="pending",
                 )
                 report["document_applications_created"] += 1
+                stage = "telegram_notification"
+                try:
+                    notifier.send_document_only_notification(
+                        job,
+                        str((((application_documents.get("resume") or {}).get("pdf") or {}).get("webViewLink", ""))),
+                        str((((application_documents.get("cover_letter") or {}).get("pdf") or {}).get("webViewLink", ""))),
+                    )
+                    state_store.mark_status(
+                        message_id,
+                        "document_only_created",
+                        notification_status="sent",
+                    )
+                    report["notifications_sent"] += 1
+                except Exception as exc:
+                    state_store.mark_status(
+                        message_id,
+                        "document_only_created",
+                        notification_status="failed",
+                    )
+                    report["errors"].append(
+                        _error_record(message_id, title, stage, exc)
+                    )
+                else:
+                    try:
+                        collector.mark_processed(message_id)
+                    except Exception as exc:
+                        report["errors"].append(
+                            _error_record(
+                                message_id, title, "processed_id_persistence", exc
+                            )
+                        )
                 continue
 
             idempotency_key = draft_executor.idempotency_message_id(message_id)
