@@ -94,6 +94,66 @@ class GeminiJobAnalyzerTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "job description is empty"):
             self.analyzer.analyze_job({"subject": "No description"}, "Profile text")
 
+    def test_generates_plain_text_cover_letter_from_configured_context(self):
+        self.response.text = "  Dear Hiring Team,\nI am interested in the Java role.  \n"
+        analysis = {
+            "match_score": 82,
+            "matching_skills": ["Java", "Spring Boot"],
+            "missing_keywords": ["Kubernetes"],
+            "summary": "Strong match based on Java experience.",
+            "eligible_for_draft": True,
+        }
+
+        result = self.analyzer.generate_cover_letter(
+            {
+                "subject": "Senior Java Engineer",
+                "company": "Example GmbH",
+                "body": "We need Java and Spring Boot experience.",
+            },
+            "Experienced Java engineer with Spring Boot experience.",
+            analysis,
+        )
+
+        self.assertEqual(result, "Dear Hiring Team,\nI am interested in the Java role.")
+        self.client.models.generate_content.assert_called_once()
+        call = self.client.models.generate_content.call_args.kwargs
+        self.assertEqual(call["model"], self.analyzer.model)
+        self.assertIn(f"configured language: {self.analyzer.language}", call["contents"])
+        self.assertIn("Example GmbH", call["contents"])
+        self.assertIn("Do not invent or imply unsupported facts", call["contents"])
+        self.assertIn("Kubernetes", call["contents"])
+
+    def test_rejects_empty_cover_letter_response(self):
+        self.response.text = "  "
+
+        with self.assertRaisesRegex(GeminiAnalysisError, "empty cover letter"):
+            self.analyzer.generate_cover_letter(
+                "Java developer role",
+                "Java developer profile",
+                {"match_score": 80},
+            )
+
+    def test_wraps_cover_letter_generation_failure(self):
+        self.client.models.generate_content.side_effect = TimeoutError("request timed out")
+
+        with self.assertRaisesRegex(GeminiAnalysisError, "while generating a cover letter") as error:
+            self.analyzer.generate_cover_letter(
+                "Java developer role",
+                "Java developer profile",
+                {"match_score": 80},
+            )
+
+        self.assertIsInstance(error.exception.__cause__, TimeoutError)
+
+    def test_rejects_invalid_cover_letter_inputs(self):
+        with self.assertRaisesRegex(ValueError, "master_profile"):
+            self.analyzer.generate_cover_letter("Java developer role", " ", {})
+
+        with self.assertRaisesRegex(TypeError, "job_analysis"):
+            self.analyzer.generate_cover_letter(
+                "Java developer role", "Java developer profile", []
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
