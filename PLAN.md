@@ -63,3 +63,6 @@ Prepare the pipeline for reliable, secure, and observable operation before enabl
   - Code, configuration schema, tests, and migration docs are implemented; configure the separate template ID before live use.
   - Read candidate facts from a dedicated master profile document and use a separate Google Doc as the output layout with replaceable placeholders.
   - Complete and verify this migration before the Phase 7.7 live pilot.
+- [ ] **Phase 7.9 (#24, low priority):** Configure Gemini prompts at runtime.
+  - Store editable analysis, resume-tailoring, and cover-letter instructions in Google Docs loaded at the start of each run.
+  - Keep output schemas and profile-grounding safeguards enforced by code, and record prompt revisions for traceability and rollback.
