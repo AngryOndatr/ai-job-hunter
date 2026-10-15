@@ -15,6 +15,26 @@ class GeminiAnalysisError(RuntimeError):
     """Raised when Gemini cannot return a valid job analysis."""
 
 
+def _safe_api_error_context(error: Exception) -> str:
+    """Return provider error metadata without including response or prompt text."""
+    details = [type(error).__name__]
+    code = getattr(error, "code", None)
+    if type(code) is not int:
+        code = getattr(error, "status_code", None)
+    if type(code) is int:
+        details.append(f"HTTP {code}")
+
+    status = getattr(error, "status", None)
+    if (
+        isinstance(status, str)
+        and 0 < len(status) <= 64
+        and status.isascii()
+        and all(char.isupper() or char.isdigit() or char == "_" for char in status)
+    ):
+        details.append(status)
+    return f" (provider error: {', '.join(details)})"
+
+
 _ANALYSIS_SCHEMA = {
     "type": "OBJECT",
     "properties": {
@@ -170,7 +190,9 @@ class GeminiJobAnalyzer:
                 ),
             )
         except Exception as exc:
-            raise GeminiAnalysisError(f"Gemini request failed for model '{self.model}'.") from exc
+            raise GeminiAnalysisError(
+                f"Gemini request failed for model '{self.model}'{_safe_api_error_context(exc)}."
+            ) from exc
 
         response_text = getattr(response, "text", None)
         if not response_text:
@@ -224,7 +246,8 @@ class GeminiJobAnalyzer:
             )
         except Exception as exc:
             raise GeminiAnalysisError(
-                f"Gemini request failed while generating a cover letter for model '{self.model}'."
+                "Gemini request failed while generating a cover letter "
+                f"for model '{self.model}'{_safe_api_error_context(exc)}."
             ) from exc
 
         response_text = getattr(response, "text", None)
@@ -278,7 +301,8 @@ class GeminiJobAnalyzer:
             )
         except Exception as exc:
             raise GeminiAnalysisError(
-                f"Gemini request failed while tailoring resume sections for model '{self.model}'."
+                "Gemini request failed while tailoring resume sections "
+                f"for model '{self.model}'{_safe_api_error_context(exc)}."
             ) from exc
 
         response_text = getattr(response, "text", None)
@@ -340,7 +364,8 @@ class GeminiJobAnalyzer:
             )
         except Exception as exc:
             raise GeminiAnalysisError(
-                "Gemini could not verify generated claims against the master profile."
+                "Gemini could not verify generated claims against the master profile"
+                f"{_safe_api_error_context(exc)}."
             ) from exc
 
         response_text = getattr(response, "text", None)
