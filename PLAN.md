@@ -61,9 +61,17 @@ Prepare the pipeline for reliable, secure, and observable operation before enabl
   - Write a compact GitHub Actions step summary while retaining non-zero workflow exits for preflight and job failures.
   - Document failure triage, retries, draft recovery, and safe verification in `RUNBOOK.md` without logging credentials, message bodies, or profile content.
 - [ ] **Phase 7.7 (#16):** Complete controlled live verification and pilot.
-  - Manual workflow modes, one-job pilot cap, default-off scheduled-run gate, and a safe pilot record template are implemented; real-account verification is pending configured credentials and resume-template ID.
+  - Manual workflow modes, configurable job cap, default-off scheduled-run gate, and a safe pilot record template are implemented; real-account verification is pending configured credentials and resume-template ID.
   - Verify dry-run against the configured Google/Gemini accounts, then run a small capped live pilot that creates documents and drafts only.
+  - Complete Phase 7.7.1 before treating the pilot as representative: relevant jobs without an application email must still produce usable application documents.
   - Confirm generated documents, Gmail drafts, processed-state recovery, Telegram alerts, and that no email is sent; record results and rollback steps before enabling scheduled execution.
+- [ ] **Phase 7.7.1:** Prepare applications for relevant jobs without an email recipient.
+  - Do not skip an otherwise eligible job solely because the alert has no application email; continue analysis, tailoring, and factual-grounding review.
+  - Save the tailored resume and cover letter in a company-specific subfolder under the configured Google Drive output folder. Create a Google Docs document and a review-ready PDF for each artifact, using safe names and a stable fallback when the company name is unavailable.
+  - For jobs with an email recipient, preserve the existing Gmail-draft workflow. For jobs without one, do not create a Gmail draft; send a Telegram notification with the Drive artifact links so the user can apply through the job platform.
+  - Persist a distinct completed state and deterministic idempotency keys for document-only applications so retries reuse artifacts and do not mark the source message as skipped or create duplicates.
+  - Keep dry-run read-only and report separately which jobs would create Gmail drafts and which would create document-only applications.
+  - Acceptance: eligible jobs without recipients create the resume and cover-letter artifacts under `Output Folder/<Company Name>`, are marked complete, and are notified without requiring Gmail draft access; jobs with recipients retain current behavior; below-threshold jobs remain skipped; retries reconcile existing artifacts; automated tests cover both paths and dry-run side-effect boundaries.
 - [ ] **Phase 7.8 (#23):** Separate factual profile source from resume output template.
   - Code, configuration schema, tests, and migration docs are implemented; configure the separate template ID before live use.
   - Read candidate facts from a dedicated master profile document and use a separate Google Doc as the output layout with replaceable placeholders.
