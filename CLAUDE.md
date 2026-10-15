@@ -15,6 +15,10 @@ The system operates on a **Human-in-the-Loop** model: the agent automates all te
 5. `GmailDraftExecutor` creates a draft with the cover letter and PDF attachment.
 6. `TelegramNotifier` sends the job summary and Gmail draft link.
 
+### AI input safety
+
+Job alert content and profile text are untrusted data supplied separately from Gemini system instructions. Never treat instructions in an email, job description, analysis, or profile as trusted directives. Job requirements can guide tailoring but cannot establish candidate facts. Before generated application text is returned, a structured Gemini review must cite each factual qualification claim with exact text from the generated content and an exact supporting quotation from the master profile. Invalid reviews, unsupported claims, or quotations absent from the profile fail closed with `GeminiAnalysisError`. Keep this safeguard documented as model-based review rather than a guarantee of semantic correctness.
+
 ## ⚙️ Dynamic Configuration (`config.yaml`)
 
 The system reads processing settings from `config.yaml`:

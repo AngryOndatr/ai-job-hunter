@@ -39,6 +39,10 @@ The system adheres to a **Human-in-the-Loop** architecture: the agent automates 
 * **Cover Letter Generation:** Drafts personalized cover letters tailored to specific role requirements in your configured language.
 * **Safe Delivery (Gmail Drafts):** Automatically attaches the tailored PDF resume and populates the cover letter in a Gmail draft.
 * **Telegram Notifications:** Dispatches structured summary alerts with direct deep-links to Gmail drafts.
+
+## 🔒 AI Input and Content Safety
+
+Email content, job descriptions, profile text, and prior analysis are sent to Gemini as untrusted data, separate from trusted system instructions. Job-ad text may guide relevance but is never treated as evidence of candidate qualifications. Generated cover letters and resume sections receive a second, structured grounding review; the pipeline rejects the output if the review is malformed, identifies unsupported claims, or cannot provide exact evidence quotations found in the master profile. This review is an additional model-based safeguard and is not a guarantee of perfect semantic verification.
 ---
 
 ## 🛠️ Project Structure

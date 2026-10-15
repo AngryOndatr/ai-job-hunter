@@ -53,9 +53,9 @@ Prepare the pipeline for reliable, secure, and observable operation before enabl
 - [x] **Phase 7.4 (#19):** Validate configuration and runtime secrets before processing.
   - Validate required fields, types, ranges, OAuth scopes, and run-mode secrets before scanning messages.
   - Keep preflight and per-job error reporting actionable without exposing secret values or full job/resume content; cover these paths with automated tests.
-- [ ] **Phase 7.5 (#18):** Harden AI input handling and generated application content.
-  - Treat email content as untrusted input, constrain prompt-injection influence, and require resume claims to be supported by the master profile.
-  - Add tests for malicious instructions, malformed model output, and unsupported claims.
+- [x] **Phase 7.5 (#18):** Harden AI input handling and generated application content.
+  - Pass trusted directives as Gemini system instructions and serialize emails, job descriptions, analysis, and profile text as untrusted source data.
+  - Fail closed when a structured grounding review is malformed, identifies unsupported claims, or lacks exact generated-claim and master-profile evidence quotations; cover these cases with automated tests.
 - [ ] **Phase 7.6 (#17):** Add production diagnostics and an operator runbook.
   - Produce actionable per-run and per-job status, document retry/incident procedures, and make scheduled-run failures visible.
   - Record enough information to troubleshoot without logging sensitive content.
