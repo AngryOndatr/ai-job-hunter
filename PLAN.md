@@ -66,12 +66,15 @@ Prepare the pipeline for reliable, secure, and observable operation before enabl
   - Complete Phase 7.7.1 before treating the pilot as representative: relevant jobs without an application email must still produce usable application documents.
   - Confirm generated documents, Gmail drafts, processed-state recovery, Telegram alerts, and that no email is sent; record results and rollback steps before enabling scheduled execution.
 - [ ] **Phase 7.7.1:** Prepare applications for relevant jobs without an email recipient.
-  - Do not skip an otherwise eligible job solely because the alert has no application email; continue analysis, tailoring, and factual-grounding review.
-  - Save the tailored resume and cover letter in a company-specific subfolder under the configured Google Drive output folder. Create a Google Docs document and a review-ready PDF for each artifact, using safe names and a stable fallback when the company name is unavailable.
-  - For jobs with an email recipient, preserve the existing Gmail-draft workflow. For jobs without one, do not create a Gmail draft; send a Telegram notification with the Drive artifact links so the user can apply through the job platform.
-  - Persist a distinct completed state and deterministic idempotency keys for document-only applications so retries reuse artifacts and do not mark the source message as skipped or create duplicates.
-  - Keep dry-run read-only and report separately which jobs would create Gmail drafts and which would create document-only applications.
-  - Acceptance: eligible jobs without recipients create the resume and cover-letter artifacts under `Output Folder/<Company Name>`, are marked complete, and are notified without requiring Gmail draft access; jobs with recipients retain current behavior; below-threshold jobs remain skipped; retries reconcile existing artifacts; automated tests cover both paths and dry-run side-effect boundaries.
+  - Decomposed into the following implementation tasks:
+    - [ ] **Phase 7.7.1.1:** Route eligible jobs without an application email to document-only preparation instead of marking them skipped.
+    - [ ] **Phase 7.7.1.2:** Create company-scoped Drive folders and save tailored resumes and cover letters as Google Docs and review-ready PDFs.
+    - [ ] **Phase 7.7.1.3:** Add durable completion, idempotent artifact recovery, and Telegram notifications for document-only applications.
+    - [ ] **Phase 7.7.1.4:** Extend dry-run reporting, automated coverage, and operator documentation for both email and document-only workflows.
+  - Jobs with recipients retain the existing Gmail-draft flow; eligible jobs without recipients still receive full analysis, tailoring, and factual-grounding review, with artifacts saved under `Output Folder/<Company Name>` and no Gmail draft.
+  - Use safe company-folder names and a stable fallback when the company is unavailable. Retries must reconcile existing artifacts without duplicates, and document-only jobs must not be recorded as skipped.
+  - Dry-run remains read-only and reports draft candidates separately from document-only candidates. Telegram notifications include Drive artifact links for completed document-only applications.
+  - Acceptance: both routing paths work; below-threshold jobs remain skipped; document-only completion is durable and idempotent; dry-run has no external write side effects; automated tests cover both paths, retries, and reporting.
 - [ ] **Phase 7.8 (#23):** Separate factual profile source from resume output template.
   - Code, configuration schema, tests, and migration docs are implemented; configure the separate template ID before live use.
   - Read candidate facts from a dedicated master profile document and use a separate Google Doc as the output layout with replaceable placeholders.
