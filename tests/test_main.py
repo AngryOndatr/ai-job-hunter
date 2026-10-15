@@ -6,7 +6,7 @@ from unittest.mock import Mock, patch
 
 import yaml
 
-from main import run_pipeline
+from main import _error_record, run_pipeline
 from gmail_executor import GmailDraftExecutor
 
 
@@ -16,7 +16,32 @@ class PipelineTests(unittest.TestCase):
         self.addCleanup(self.temp_dir.cleanup)
         self.config_path = Path(self.temp_dir.name) / "config.yaml"
         self.config_path.write_text(
-            yaml.safe_dump({"limits": {"max_jobs_per_run": 5}}), encoding="utf-8"
+            yaml.safe_dump(
+                {
+                    "gmail": {
+                        "target_labels": ["Jobs"],
+                        "max_email_age_days": 2,
+                        "processed_ids_file": "processed_ids.json",
+                    },
+                    "ai_policy": {
+                        "provider": "google",
+                        "model": "gemini-test-model",
+                        "language": "en",
+                        "min_match_score_to_draft": 75,
+                    },
+                    "google_docs": {
+                        "master_profile_doc_id": "profile-id",
+                        "resume_template_doc_id": "template-id",
+                        "output_folder_id": "output-folder-id",
+                    },
+                    "paths": {
+                        "credentials_file": "credentials.json",
+                        "token_file": "token.json",
+                    },
+                    "limits": {"max_jobs_per_run": 5},
+                }
+            ),
+            encoding="utf-8",
         )
         self.job = {
             "id": "gmail-message-1",
@@ -264,9 +289,59 @@ class PipelineTests(unittest.TestCase):
         self.draft_executor.find_existing_draft.assert_called_once()
         self.collector.mark_processed.assert_called_once_with("gmail-message-1")
 
+    def test_missing_secrets_fail_before_gmail_collector_is_initialized(self):
+        with patch.dict("os.environ", {}, clear=True):
+            with patch("main.GmailJobCollector") as collector_factory:
+                with self.assertRaisesRegex(ValueError, "GEMINI_API_KEY"):
+                    run_pipeline(config_path=str(self.config_path))
+
+        collector_factory.assert_not_called()
+
+    def test_oauth_preflight_happens_before_gmail_collector_initialization(self):
+        events = []
+        collector_instance = Mock()
+        collector_instance.fetch_new_job_emails.return_value = []
+
+        def oauth_preflight(_config):
+            events.append("oauth")
+
+        def create_collector(**_kwargs):
+            events.append("collector")
+            return collector_instance
+
+        with patch.dict(
+            "os.environ",
+            {
+                "GEMINI_API_KEY": "gemini-test-secret",
+                "TELEGRAM_BOT_TOKEN": "telegram-test-secret",
+                "TELEGRAM_CHAT_ID": "12345",
+            },
+            clear=True,
+        ):
+            with patch("main.preflight_google_oauth", side_effect=oauth_preflight):
+                with patch("main.GmailJobCollector", side_effect=create_collector):
+                    run_pipeline(config_path=str(self.config_path))
+
+        self.assertEqual(events, ["oauth", "collector"])
+
+    def test_unexpected_job_error_details_are_redacted(self):
+        secret = "private-token-and-job-content"
+        error = _error_record("gmail-1", "Engineer", "analysis", RuntimeError(secret))
+
+        self.assertNotIn(secret, error["error"])
+        self.assertIn("Details redacted", error["error"])
+
     def test_respects_max_jobs_per_run_without_acknowledging_queued_jobs(self):
         self.config_path.write_text(
-            yaml.safe_dump({"limits": {"max_jobs_per_run": 1}}), encoding="utf-8"
+            yaml.safe_dump(
+                {
+                    "gmail": {"target_labels": ["Jobs"], "max_email_age_days": 2, "processed_ids_file": "processed_ids.json"},
+                    "ai_policy": {"provider": "google", "model": "gemini-test-model", "language": "en", "min_match_score_to_draft": 75},
+                    "google_docs": {"master_profile_doc_id": "profile-id", "resume_template_doc_id": "template-id", "output_folder_id": "output-folder-id"},
+                    "paths": {"credentials_file": "credentials.json", "token_file": "token.json"},
+                    "limits": {"max_jobs_per_run": 1},
+                }
+            ), encoding="utf-8"
         )
         second_job = {**self.job, "id": "gmail-message-2"}
         self.collector.fetch_new_job_emails.return_value = [self.job, second_job]

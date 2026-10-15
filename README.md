@@ -128,6 +128,8 @@ python main.py
 ```
 *Note: On initial execution, a browser window will open requesting Google API authorization. Upon approval, `token.json` will be generated automatically.*
 
+Before scanning Gmail, startup validates the required configuration fields and ranges, checks the secrets needed for the selected run mode, and verifies that Google OAuth credentials include the required Gmail, Drive, and Docs scopes. Preflight errors identify the setting to fix without printing secret values. A normal run requires Gemini and Telegram credentials; `--dry-run` requires Gemini credentials but does not require Telegram credentials.
+
 To verify ingestion and AI analysis without creating Google Docs, Gmail drafts, Telegram notifications, or marking messages as processed, run:
 ```bash
 python main.py --dry-run

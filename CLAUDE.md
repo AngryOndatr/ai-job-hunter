@@ -24,6 +24,7 @@ The system reads processing settings from `config.yaml`:
 - **Google Docs:** factual master profile document ID, separate resume template document ID, and output folder ID.
 - **Run limit:** `limits.max_jobs_per_run` caps jobs attempted in one run.
 - `filters.keywords` and `filters.blacklisted_keywords` are present in the configuration but are not currently applied by `GmailJobCollector` or `main.py`.
+- `main.py` validates configuration, required run-mode secrets, and Google OAuth scopes before scanning Gmail. Dry-run requires Gemini credentials but not Telegram credentials. Keep configuration/preflight errors actionable and never include secret values or full job/profile content in reports.
 
 ## 🛠️ Platform Responsibilities
 

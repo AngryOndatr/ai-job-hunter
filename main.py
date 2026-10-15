@@ -2,16 +2,23 @@
 
 import argparse
 import json
+import sys
 from collections.abc import Mapping
 from typing import Any
 
-import yaml
+from dotenv import load_dotenv
 
 from ai_tailor import GeminiJobAnalyzer
 from drive_service import GoogleDriveManager
 from gmail_collector import GmailJobCollector
 from gmail_executor import GmailDraftExecutor
 from processing_state import GoogleDriveProcessingState
+from config_validation import (
+    ConfigurationError,
+    load_validated_config,
+    preflight_google_oauth,
+    validate_required_secrets,
+)
 from telegram_notifier import TelegramNotifier
 
 
@@ -27,16 +34,22 @@ def run_pipeline(
     dry_run: bool = False,
 ) -> dict[str, Any]:
     """Run one batch and return a report; dependencies can be injected for tests."""
-    try:
-        with open(config_path, "r", encoding="utf-8") as config_file:
-            config = yaml.safe_load(config_file) or {}
-    except OSError as exc:
-        raise FileNotFoundError(f"Could not read configuration file '{config_path}'.") from exc
-
-    limits = config.get("limits", {})
-    max_jobs = limits.get("max_jobs_per_run", 5)
-    if type(max_jobs) is not int or max_jobs < 1:
-        raise ValueError("limits.max_jobs_per_run must be a positive integer.")
+    load_dotenv()
+    config = load_validated_config(config_path)
+    max_jobs = config["limits"]["max_jobs_per_run"]
+    validate_required_secrets(
+        dry_run=dry_run,
+        require_gemini=analyzer is None,
+        require_telegram=not dry_run and notifier is None,
+    )
+    needs_google_oauth = (
+        collector is None
+        or drive_manager is None
+        or state_store is None
+        or (not dry_run and draft_executor is None)
+    )
+    if needs_google_oauth:
+        preflight_google_oauth(config)
 
     collector = collector or GmailJobCollector(config_path=config_path)
     collected_jobs = collector.fetch_new_job_emails(defer_processed=True)
@@ -236,11 +249,25 @@ def _error_record(
     *,
     draft: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
+    safe_message_types = {
+        "ValueError",
+        "TypeError",
+        "GeminiAnalysisError",
+        "GoogleDriveServiceError",
+        "GmailDraftError",
+        "TelegramNotificationError",
+        "ProcessingStateError",
+    }
+    detail = (
+        str(error)
+        if type(error).__name__ in safe_message_types
+        else "Details redacted to protect credentials and application content."
+    )
     record = {
         "job_id": message_id,
         "title": title,
         "stage": stage,
-        "error": f"{type(error).__name__}: {error}",
+        "error": f"{type(error).__name__}: {detail}",
     }
     if draft and draft.get("url"):
         record["draft_url"] = draft["url"]
@@ -255,7 +282,11 @@ def main() -> int:
         help="Run ingestion and AI analysis without creating documents, drafts, or notifications.",
     )
     args = parser.parse_args()
-    report = run_pipeline(dry_run=args.dry_run)
+    try:
+        report = run_pipeline(dry_run=args.dry_run)
+    except ConfigurationError as exc:
+        print(f"Preflight failed: {exc}", file=sys.stderr)
+        return 2
     print(json.dumps(report, ensure_ascii=False, indent=2))
     return 1 if report["errors"] else 0
 

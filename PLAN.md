@@ -50,9 +50,9 @@ Prepare the pipeline for reliable, secure, and observable operation before enabl
   - Store a recoverable state machine in a Google Drive JSON manifest and reconcile generated documents and Gmail drafts with deterministic idempotency keys.
   - Document retention and Google Drive API usage; serialize scheduled/manual workflow runs across refs.
   - Define recovery behavior for failures between document creation, draft creation, and state persistence; retries must not silently create duplicate application drafts.
-- [ ] **Phase 7.4 (#19):** Validate configuration and runtime secrets before processing.
-  - Validate required fields, types, ranges, OAuth scopes, and secrets with actionable errors before scanning messages.
-  - Ensure logs and failure reports never expose credentials or full job/resume content.
+- [x] **Phase 7.4 (#19):** Validate configuration and runtime secrets before processing.
+  - Validate required fields, types, ranges, OAuth scopes, and run-mode secrets before scanning messages.
+  - Keep preflight and per-job error reporting actionable without exposing secret values or full job/resume content; cover these paths with automated tests.
 - [ ] **Phase 7.5 (#18):** Harden AI input handling and generated application content.
   - Treat email content as untrusted input, constrain prompt-injection influence, and require resume claims to be supported by the master profile.
   - Add tests for malicious instructions, malformed model output, and unsupported claims.
@@ -74,27 +74,27 @@ Prepare the pipeline for reliable, secure, and observable operation before enabl
 
 Polish the repository so its claims, verification evidence, and operational behavior are clear and credible to engineers reviewing the project. Complete the production-readiness safeguards in Phase 7 before calling the application production-ready; Phase 8 improves the engineering quality and presentation of the repository.
 
-- [ ] **Phase 8.1:** Reconcile documentation and implementation status.
+- [ ] **Phase 8.1 (#25):** Reconcile documentation and implementation status.
   - Describe the current architecture accurately as a modular single-process pipeline unless the system is actually split into independently acting agents.
   - Scope ATS and other capability claims to behavior the code demonstrates; keep model/provider details consistent with configuration.
   - Audit phase and task checkboxes against merged code, CI results, and pending account-specific/live verification; distinguish implemented work from verified operation.
   - Acceptance: README, `CLAUDE.md`, and `PLAN.md` contain no contradictory architecture, capability, or completion claims.
-- [ ] **Phase 8.2:** Add automated code-quality checks to CI.
+- [ ] **Phase 8.2 (#26):** Add automated code-quality checks to CI.
   - Adopt and configure a Python formatter and linter, then run them alongside unit tests on pushes and pull requests.
   - Document the same commands for local development and keep CI failures actionable.
   - Acceptance: CI rejects formatting or lint violations and the existing codebase passes the configured checks.
-- [ ] **Phase 8.3:** Add integration and recovery verification beyond isolated mocks.
+- [ ] **Phase 8.3 (#27):** Add integration and recovery verification beyond isolated mocks.
   - Add deterministic API-boundary/contract tests for the Gmail, Drive, and Docs requests and for recovery after interruption at each persisted side-effect boundary.
   - Keep ordinary CI independent of personal Google credentials; define an explicitly gated verification path for tests requiring real Google services.
   - Acceptance: automated checks cover state reload, ambiguous API outcomes, duplicate artifact reconciliation, and state-write failures; live checks are clearly identified separately.
-- [ ] **Phase 8.4:** Harden durable-state integrity and long-term growth.
+- [ ] **Phase 8.4 (#28):** Harden durable-state integrity and long-term growth.
   - Evaluate whole-manifest rewrites, concurrent writers, Drive revision conflicts, and the cost of retaining every processed message indefinitely.
   - Implement a bounded and concurrency-safe persistence/retention strategy with versioned migration behavior and recovery for malformed or incompatible state.
   - Acceptance: concurrent updates cannot silently overwrite one another, retention behavior is documented, and recovery/migration behavior has automated coverage.
-- [ ] **Phase 8.5:** Make the repository license declaration complete.
+- [ ] **Phase 8.5 (#29):** Make the repository license declaration complete.
   - Add the license text matching the MIT declaration in `README.md`, including the appropriate copyright notice.
   - Acceptance: repository license metadata and README agree, and the license file is present at the repository root.
-- [ ] **Phase 8.6:** Establish clear project-level contribution and verification guidance.
+- [ ] **Phase 8.6 (#30):** Establish clear project-level contribution and verification guidance.
   - Document supported Python version, setup, test and quality-check commands, configuration expectations, and how contributors can run changes without production credentials.
   - Link to the Phase 7.6 operator runbook and Phase 7.7 live-pilot evidence rather than duplicating their operational procedures here.
   - Acceptance: a new contributor can install dependencies, run the full local checks, and understand which behaviors still require controlled live verification.

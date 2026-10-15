@@ -84,8 +84,11 @@ class GmailJobCollector:
                         if not defer_processed:
                             self.processed_ids.add(msg_id)
 
-            except Exception as e:
-                print(f"❌ Ошибка при сканировании метки {label_name}: {e}")
+            except Exception as exc:
+                print(
+                    "Failed to scan a configured Gmail label "
+                    f"({type(exc).__name__}); details redacted."
+                )
 
         if not defer_processed:
             self._save_processed_ids()
