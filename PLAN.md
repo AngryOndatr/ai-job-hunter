@@ -45,8 +45,10 @@ Prepare the pipeline for reliable, secure, and observable operation before enabl
   - Dry-run skips draft/Telegram client initialization, leaves all processed IDs unchanged, and omits recipient addresses; automated coverage added.
   - Run ingestion and analysis without requiring Telegram credentials or initializing draft/notification clients.
   - Keep dry-run output useful while excluding unnecessary personal data and preserving processed-message state.
-- [ ] **Phase 7.3 (#20):** Replace best-effort cached processing state with durable, duplicate-safe processing.
+- [x] **Phase 7.3 (#20):** Replace best-effort cached processing state with durable, duplicate-safe processing.
   - Preserve processing state across GitHub runner/cache eviction and deploys.
+  - Store a recoverable state machine in a Google Drive JSON manifest and reconcile generated documents and Gmail drafts with deterministic idempotency keys.
+  - Document retention and Google Drive API usage; serialize scheduled/manual workflow runs across refs.
   - Define recovery behavior for failures between document creation, draft creation, and state persistence; retries must not silently create duplicate application drafts.
 - [ ] **Phase 7.4 (#19):** Validate configuration and runtime secrets before processing.
   - Validate required fields, types, ranges, OAuth scopes, and secrets with actionable errors before scanning messages.

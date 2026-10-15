@@ -49,6 +49,7 @@ class GoogleDriveManagerTests(unittest.TestCase):
 
         self.drive.files.return_value.copy.return_value.execute.return_value = self.document
         self.drive.files.return_value.export.return_value.execute.return_value = self.pdf_bytes
+        self.drive.files.return_value.update.return_value.execute.return_value = self.pdf_file
         self.drive.files.return_value.create.return_value.execute.return_value = self.pdf_file
         self.docs.documents.return_value.batchUpdate.return_value.execute.return_value = {
             "replies": [{"replaceAllText": {"occurrencesChanged": 1}}]
@@ -157,7 +158,6 @@ class GoogleDriveManagerTests(unittest.TestCase):
         self.assertEqual(result["pdf"], self.pdf_file)
         self.assertEqual(result["pdf_bytes"], self.pdf_bytes)
         self.assertEqual(result["replacement_counts"], {"{{SUMMARY}}": 1})
-
         self.drive.files.return_value.copy.assert_called_once_with(
             fileId="template-id",
             body={
@@ -178,6 +178,44 @@ class GoogleDriveManagerTests(unittest.TestCase):
             mimeType="application/pdf",
         )
         self.drive.files.return_value.create.assert_called_once()
+
+    def test_reuses_existing_resume_artifacts_for_same_idempotency_key(self):
+        document = {
+            **self.document,
+            "appProperties": {
+                "aiJobHunterKey": "stable-key",
+                "aiJobHunterArtifact": "document",
+            },
+        }
+        pdf = {
+            **self.pdf_file,
+            "appProperties": {
+                "aiJobHunterKey": "stable-key",
+                "aiJobHunterArtifact": "pdf",
+            },
+        }
+        self.drive.files.return_value.list.return_value.execute.side_effect = [
+            {"files": [document]},
+            {"files": [pdf]},
+        ]
+        self.docs.documents.return_value.get.return_value.execute.return_value = {
+            "body": {"content": [{"paragraph": {"elements": [{"textRun": {"content": "Already tailored"}}]}}]}
+        }
+        self.drive.files.return_value.export.return_value.execute.return_value = self.pdf_bytes
+        self.drive.files.return_value.update.return_value.execute.return_value = self.pdf_file
+
+        result = self.manager.create_tailored_resume(
+            "Senior Java Engineer", {"{{SUMMARY}}": "Java engineer"},
+            idempotency_key="stable-key",
+        )
+
+        self.assertEqual(result["document"]["id"], self.document["id"])
+        self.assertEqual(result["pdf"]["id"], self.pdf_file["id"])
+        self.drive.files.return_value.copy.assert_not_called()
+        self.docs.documents.return_value.batchUpdate.assert_not_called()
+        self.drive.files.return_value.create.assert_not_called()
+        self.drive.files.return_value.update.assert_called_once()
+
 
     def test_trashes_copy_when_template_placeholder_is_missing(self):
         self.docs.documents.return_value.batchUpdate.return_value.execute.return_value = {

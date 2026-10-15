@@ -19,7 +19,7 @@ The system operates on a **Human-in-the-Loop** model: the agent automates all te
 
 The system reads processing settings from `config.yaml`:
 
-- **Gmail settings:** target labels, maximum message age, and `processed_ids.json` path. During orchestration, IDs are acknowledged after a job is skipped or a draft is created; failures before draft creation remain eligible for retry.
+- **Gmail settings:** target labels, maximum message age, and local `processed_ids.json` path. Durable processing state is stored in `ai-job-hunter-processing-state.json` in the configured Google Drive output folder; local IDs are acknowledged after a job is skipped or a draft is created.
 - **AI policy:** model, response language, and minimum score (`min_match_score_to_draft`).
 - **Google Docs:** factual master profile document ID, separate resume template document ID, and output folder ID.
 - **Run limit:** `limits.max_jobs_per_run` caps jobs attempted in one run.
@@ -81,5 +81,7 @@ Configure these secrets under **Settings → Secrets and variables → Actions**
 - Uses Python 3.11, installs dependencies from `requirements.txt`, and runs `main.py`.
 - Requires the `GEMINI_API_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, and `GOOGLE_TOKEN_JSON` repository secrets.
 - Writes the Google token from the environment without echoing its contents to the log.
-- Restores and saves `processed_ids.json` through the Actions cache. The cache is best-effort state: if it is absent or evicted, messages still within the configured age window may be processed again.
-- Serializes runs on the same ref to avoid concurrent updates to the processed-ID cache.
+- Stores the durable processing manifest in Google Drive, independent of the GitHub Actions cache and runner lifetime.
+- Tracks jobs through `processing`, `resume_pending`, `resume_created`, `draft_pending`, `draft_created`, and `skipped`. Drive artifacts and pending Gmail drafts use deterministic idempotency keys so an interrupted run reuses existing artifacts.
+- Stores only message/document/draft IDs, status, timestamps, and notification status; do not add job content or recipient details to the manifest.
+- Serializes workflow runs across refs because all runs share the same Drive manifest.

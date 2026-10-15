@@ -79,6 +79,8 @@ class GoogleDriveManager:
         job_title: str,
         tailored_sections: Mapping[str, str],
         output_name: str | None = None,
+        *,
+        idempotency_key: str | None = None,
     ) -> dict[str, Any]:
         """Create a tailored Google Doc and PDF in the configured Drive folder.
 
@@ -92,13 +94,30 @@ class GoogleDriveManager:
 
         document = None
         pdf_file = None
+        document_created = False
+        pdf_created = False
         try:
-            document = self.drive.files().copy(
-                fileId=self.resume_template_id,
-                body={"name": base_name, "parents": [self.output_folder_id]},
-                fields="id,name,mimeType,webViewLink",
-                supportsAllDrives=True,
-            ).execute()
+            if idempotency_key:
+                document = self._find_idempotent_file(idempotency_key, "document")
+            document_reused = bool(document)
+            if not document:
+                copy_body = {"name": base_name, "parents": [self.output_folder_id]}
+                if idempotency_key:
+                    copy_body["appProperties"] = {
+                        "aiJobHunterKey": idempotency_key,
+                        "aiJobHunterArtifact": "document",
+                    }
+                document = self.drive.files().copy(
+                    fileId=self.resume_template_id,
+                    body=copy_body,
+                    fields=(
+                        "id,name,mimeType,webViewLink,appProperties"
+                        if idempotency_key
+                        else "id,name,mimeType,webViewLink"
+                    ),
+                    supportsAllDrives=True,
+                ).execute()
+                document_created = True
             document_id = document["id"]
 
             replacement_requests = [
@@ -110,24 +129,36 @@ class GoogleDriveManager:
                 }
                 for placeholder, text in replacements.items()
             ]
-            update_response = self.docs.documents().batchUpdate(
-                documentId=document_id,
-                body={"requests": replacement_requests},
-            ).execute()
-
-            replies = update_response.get("replies", [])
-            if len(replies) != len(replacements):
-                raise GoogleDriveServiceError(
-                    "Google Docs returned an incomplete placeholder replacement response."
-                )
             replacement_counts = {}
-            for (placeholder, _), reply in zip(replacements.items(), replies):
-                count = reply.get("replaceAllText", {}).get("occurrencesChanged", 0)
-                replacement_counts[placeholder] = count
-                if count == 0:
+            if document_reused:
+                current_doc = self.docs.documents().get(documentId=document_id).execute()
+                existing_text = self._extract_document_text(current_doc)
+                replacement_requests = [
+                    request for request in replacement_requests
+                    if request["replaceAllText"]["containsText"]["text"] in existing_text
+                ]
+            if replacement_requests:
+                update_response = self.docs.documents().batchUpdate(
+                    documentId=document_id,
+                    body={"requests": replacement_requests},
+                ).execute()
+                replies = update_response.get("replies", [])
+                if len(replies) != len(replacement_requests):
                     raise GoogleDriveServiceError(
-                        f"Template placeholder {placeholder!r} was not found."
+                        "Google Docs returned an incomplete placeholder replacement response."
                     )
+                for request, reply in zip(replacement_requests, replies):
+                    placeholder = request["replaceAllText"]["containsText"]["text"]
+                    count = reply.get("replaceAllText", {}).get("occurrencesChanged", 0)
+                    replacement_counts[placeholder] = count
+                    if count == 0:
+                        raise GoogleDriveServiceError(
+                            f"Template placeholder {placeholder!r} was not found."
+                        )
+            if document_reused:
+                replacement_counts.update(
+                    {key: 0 for key in replacements if key not in replacement_counts}
+                )
 
             pdf_bytes = self.drive.files().export(
                 fileId=document_id,
@@ -137,20 +168,33 @@ class GoogleDriveManager:
                 raise GoogleDriveServiceError("Google Drive returned invalid PDF data.")
 
             pdf_name = f"{base_name}.pdf"
-            pdf_file = self.drive.files().create(
-                body={
+            media = MediaIoBaseUpload(
+                io.BytesIO(pdf_bytes), mimetype="application/pdf", resumable=False
+            )
+            if idempotency_key:
+                pdf_file = self._find_idempotent_file(idempotency_key, "pdf")
+            if pdf_file:
+                pdf_file = self.drive.files().update(
+                    fileId=pdf_file["id"], media_body=media,
+                    fields="id,name,mimeType,webViewLink,size", supportsAllDrives=True,
+                ).execute()
+            else:
+                pdf_body = {
                     "name": pdf_name,
                     "mimeType": "application/pdf",
                     "parents": [self.output_folder_id],
-                },
-                media_body=MediaIoBaseUpload(
-                    io.BytesIO(pdf_bytes),
-                    mimetype="application/pdf",
-                    resumable=False,
-                ),
-                fields="id,name,mimeType,webViewLink,size",
-                supportsAllDrives=True,
-            ).execute()
+                }
+                if idempotency_key:
+                    pdf_body["appProperties"] = {
+                        "aiJobHunterKey": idempotency_key,
+                        "aiJobHunterArtifact": "pdf",
+                    }
+                pdf_file = self.drive.files().create(
+                    body=pdf_body, media_body=media,
+                    fields="id,name,mimeType,webViewLink,size,appProperties",
+                    supportsAllDrives=True,
+                ).execute()
+                pdf_created = True
 
             return {
                 "document": document,
@@ -159,13 +203,37 @@ class GoogleDriveManager:
                 "replacement_counts": replacement_counts,
             }
         except Exception as exc:
-            self._trash_if_created(pdf_file)
-            self._trash_if_created(document)
+            if pdf_created:
+                self._trash_if_created(pdf_file)
+            if document_created:
+                self._trash_if_created(document)
             if isinstance(exc, GoogleDriveServiceError):
                 raise
             raise GoogleDriveServiceError(
                 f"Failed to create the tailored resume for {job_title!r}."
             ) from exc
+
+    def _find_idempotent_file(self, idempotency_key: str, artifact: str) -> dict[str, Any] | None:
+        escaped_key = idempotency_key.replace("\\", "\\\\").replace("'", "\\'")
+        response = self.drive.files().list(
+            q=(
+                f"'{self.output_folder_id}' in parents and trashed = false and "
+                "appProperties has { "
+                f"key='aiJobHunterKey' and value='{escaped_key}' }} and "
+                "appProperties has { "
+                f"key='aiJobHunterArtifact' and value='{artifact}' }}"
+            ),
+            pageSize=10,
+            fields="files(id,name,mimeType,webViewLink,appProperties)",
+            supportsAllDrives=True,
+            includeItemsFromAllDrives=True,
+        ).execute()
+        files = response.get("files", [])
+        if len(files) > 1:
+            raise GoogleDriveServiceError(
+                f"Multiple Drive {artifact} artifacts exist for the same source message."
+            )
+        return files[0] if files else None
 
     def load_master_profile(self) -> str:
         """Read factual candidate information from the master profile document."""

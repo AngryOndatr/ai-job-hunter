@@ -1,6 +1,7 @@
 """Create Gmail drafts containing a cover letter and tailored resume PDF."""
 
 import base64
+import hashlib
 import re
 from collections.abc import Mapping
 from email import policy
@@ -42,6 +43,8 @@ class GmailDraftExecutor:
         job: Mapping[str, Any],
         cover_letter: str,
         tailored_resume: Mapping[str, Any],
+        *,
+        idempotency_message_id: str | None = None,
     ) -> dict[str, str]:
         """Create a draft and return IDs and a Gmail URL for downstream notifications.
 
@@ -62,6 +65,11 @@ class GmailDraftExecutor:
         employer = str(job.get("employer") or job.get("company") or "").strip()
         subject = f"Application: {title} at {employer}" if employer else f"Application: {title}"
 
+        if idempotency_message_id:
+            existing = self.find_existing_draft(idempotency_message_id, recipient, subject)
+            if existing:
+                return existing
+
         pdf_bytes = tailored_resume.get("pdf_bytes")
         if not isinstance(pdf_bytes, bytes) or not pdf_bytes.startswith(b"%PDF"):
             raise ValueError("tailored_resume must contain valid PDF bytes in 'pdf_bytes'.")
@@ -72,6 +80,8 @@ class GmailDraftExecutor:
         message = EmailMessage(policy=policy.SMTP)
         message["To"] = recipient
         message["Subject"] = subject
+        if idempotency_message_id:
+            message["Message-ID"] = idempotency_message_id
         message.set_content(cover_letter.strip(), subtype="plain", charset="utf-8")
         message.add_attachment(
             pdf_bytes,
@@ -106,6 +116,50 @@ class GmailDraftExecutor:
             "recipient": recipient,
             "subject": subject,
         }
+
+    def find_existing_draft(
+        self, idempotency_message_id: str, recipient: str = "", subject: str = ""
+    ) -> dict[str, str] | None:
+        """Find a previously-created draft using its deterministic RFC 822 Message-ID."""
+        if not isinstance(idempotency_message_id, str) or not idempotency_message_id.startswith("<") or not idempotency_message_id.endswith(">"):
+            raise ValueError("idempotency_message_id must be an RFC 822 message ID.")
+        try:
+            response = (
+                self.service.users()
+                .drafts()
+                .list(userId="me", q=f"rfc822msgid:{idempotency_message_id.strip('<>')}")
+                .execute()
+            )
+        except Exception as exc:
+            raise GmailDraftError("Gmail API failed to search for an existing draft.") from exc
+        drafts = response.get("drafts", [])
+        if not drafts:
+            return None
+        if len(drafts) > 1:
+            raise GmailDraftError("Multiple drafts match the same processing idempotency key.")
+        draft = drafts[0]
+        draft_id = draft.get("id")
+        if not isinstance(draft_id, str) or not draft_id:
+            raise GmailDraftError("Gmail returned a matching draft without an ID.")
+        message = draft.get("message") or {}
+        message_id = message.get("id", "")
+        thread_id = message.get("threadId", "")
+        return {
+            "draft_id": draft_id,
+            "message_id": message_id,
+            "thread_id": thread_id,
+            "url": f"https://mail.google.com/mail/u/0/#drafts/{draft_id}",
+            "recipient": recipient,
+            "subject": subject,
+        }
+
+    @staticmethod
+    def idempotency_message_id(source_message_id: str) -> str:
+        """Derive a stable RFC 822 Message-ID without exposing the source Gmail ID."""
+        if not isinstance(source_message_id, str) or not source_message_id:
+            raise ValueError("source_message_id must be a non-empty string.")
+        digest = hashlib.sha256(source_message_id.encode("utf-8")).hexdigest()
+        return f"<ai-job-hunter-{digest}@ai-job-hunter.invalid>"
 
     @staticmethod
     def _validate_recipient(recipient: Any) -> str:

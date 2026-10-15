@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ai-job-hunter-${{ github.ref }}
+  group: ai-job-hunter-processing-state
   cancel-in-progress: false
 
 jobs:
@@ -26,14 +26,6 @@ jobs:
           python-version: "3.11"
           cache: pip
           cache-dependency-path: requirements.txt
-
-      - name: Restore processed Gmail IDs
-        uses: actions/cache/restore@v6
-        with:
-          path: processed_ids.json
-          key: processed-ids-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
-          restore-keys: |
-            processed-ids-${{ github.ref_name }}-
 
       - name: Write Google OAuth token
         env:
@@ -71,39 +63,9 @@ jobs:
           token_path.chmod(0o600)
           PY
 
-      - name: Record processed-ID state before the run
-        id: state-before
-        shell: bash
-        run: |
-          if [[ -f processed_ids.json ]]; then
-            checksum="$(sha256sum processed_ids.json | cut -d ' ' -f 1)"
-          else
-            checksum="missing"
-          fi
-          echo "checksum=$checksum" >> "$GITHUB_OUTPUT"
-
       - name: Run job application pipeline
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python -u main.py
-
-      - name: Record processed-ID state after the run
-        id: state-after
-        if: always()
-        shell: bash
-        run: |
-          if [[ -f processed_ids.json ]]; then
-            checksum="$(sha256sum processed_ids.json | cut -d ' ' -f 1)"
-          else
-            checksum="missing"
-          fi
-          echo "checksum=$checksum" >> "$GITHUB_OUTPUT"
-
-      - name: Save processed Gmail IDs
-        if: always() && steps.state-after.outputs.checksum != steps.state-before.outputs.checksum
-        uses: actions/cache/save@v6
-        with:
-          path: processed_ids.json
-          key: processed-ids-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}

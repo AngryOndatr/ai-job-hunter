@@ -1,3 +1,4 @@
+import hashlib
 import tempfile
 import unittest
 from pathlib import Path
@@ -6,6 +7,7 @@ from unittest.mock import Mock, patch
 import yaml
 
 from main import run_pipeline
+from gmail_executor import GmailDraftExecutor
 
 
 class PipelineTests(unittest.TestCase):
@@ -48,11 +50,17 @@ class PipelineTests(unittest.TestCase):
             "pdf": {"name": "Resume.pdf"},
         }
         self.draft_executor = Mock()
+        self.draft_executor.idempotency_message_id.side_effect = (
+            GmailDraftExecutor.idempotency_message_id
+        )
         self.draft_executor.create_draft.return_value = {
             "draft_id": "draft-1",
             "url": "https://mail.google.com/mail/u/0/#drafts/draft-1",
         }
         self.notifier = Mock()
+        self.state_store = Mock()
+        self.state_store.get_terminal_ids.return_value = set()
+        self.state_store.get_job_state.return_value = None
 
     def run_with_components(self):
         return run_pipeline(
@@ -62,6 +70,7 @@ class PipelineTests(unittest.TestCase):
             drive_manager=self.drive,
             draft_executor=self.draft_executor,
             notifier=self.notifier,
+            state_store=self.state_store,
         )
 
     def test_runs_eligible_job_through_draft_and_notification(self):
@@ -86,12 +95,14 @@ class PipelineTests(unittest.TestCase):
             ["{{SUMMARY}}"],
         )
         self.drive.create_tailored_resume.assert_called_once_with(
-            "Senior Java Engineer", self.analyzer.generate_tailored_sections.return_value
+            "Senior Java Engineer", self.analyzer.generate_tailored_sections.return_value,
+            idempotency_key="ai-job-hunter-" + hashlib.sha256(b"gmail-message-1").hexdigest(),
         )
         self.draft_executor.create_draft.assert_called_once_with(
             self.job,
             self.analyzer.generate_cover_letter.return_value,
             self.drive.create_tailored_resume.return_value,
+            idempotency_message_id=GmailDraftExecutor.idempotency_message_id("gmail-message-1"),
         )
         self.collector.mark_processed.assert_called_once_with("gmail-message-1")
         self.notifier.send_notification.assert_called_once_with(
@@ -110,6 +121,7 @@ class PipelineTests(unittest.TestCase):
                 collector=self.collector,
                 analyzer=self.analyzer,
                 drive_manager=self.drive,
+                state_store=self.state_store,
                 dry_run=True,
             )
 
@@ -128,6 +140,7 @@ class PipelineTests(unittest.TestCase):
         draft_factory.assert_not_called()
         notifier_factory.assert_not_called()
         self.collector.mark_processed.assert_not_called()
+        self.state_store.mark_status.assert_not_called()
 
     def test_dry_run_does_not_mark_skipped_jobs_processed(self):
         second_job = {**self.job, "id": "gmail-message-2", "application_email": ""}
@@ -142,6 +155,7 @@ class PipelineTests(unittest.TestCase):
             collector=self.collector,
             analyzer=self.analyzer,
             drive_manager=self.drive,
+            state_store=self.state_store,
             dry_run=True,
         )
 
@@ -157,6 +171,7 @@ class PipelineTests(unittest.TestCase):
             collector=self.collector,
             analyzer=self.analyzer,
             drive_manager=self.drive,
+            state_store=self.state_store,
             dry_run=True,
         )
 
@@ -216,6 +231,37 @@ class PipelineTests(unittest.TestCase):
             report["errors"][0]["draft_url"],
             "https://mail.google.com/mail/u/0/#drafts/draft-1",
         )
+        self.collector.mark_processed.assert_called_once_with("gmail-message-1")
+
+    def test_filters_jobs_already_terminal_in_durable_state(self):
+        second_job = {**self.job, "id": "gmail-message-done"}
+        self.collector.fetch_new_job_emails.return_value = [self.job, second_job]
+        self.state_store.get_terminal_ids.return_value = {"gmail-message-done"}
+
+        report = self.run_with_components()
+
+        self.assertEqual(report["fetched"], 2)
+        self.assertEqual(report["attempted"], 1)
+        self.analyzer.analyze_job.assert_called_once_with(
+            self.job, "Java engineer factual profile"
+        )
+
+    def test_recovers_draft_pending_message_without_creating_another_resume_or_draft(self):
+        self.state_store.get_job_state.return_value = {
+            "status": "draft_pending",
+            "draft_message_id": "<stable@example.invalid>",
+        }
+        self.draft_executor.find_existing_draft.return_value = {
+            "draft_id": "draft-recovered",
+            "url": "https://mail.google.com/mail/u/0/#drafts/draft-recovered",
+        }
+
+        report = self.run_with_components()
+
+        self.assertEqual(report["drafts_created"], 1)
+        self.drive.create_tailored_resume.assert_not_called()
+        self.draft_executor.create_draft.assert_not_called()
+        self.draft_executor.find_existing_draft.assert_called_once()
         self.collector.mark_processed.assert_called_once_with("gmail-message-1")
 
     def test_respects_max_jobs_per_run_without_acknowledging_queued_jobs(self):

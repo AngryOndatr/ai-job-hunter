@@ -22,7 +22,7 @@ The system adheres to a **Human-in-the-Loop** architecture: the agent automates 
 ```
 ## System Architecture Overview
 
-1. **Gmail Ingestion:** Scans targeted folders/labels for new job notification emails and filters out duplicates using `processed_ids.json`.
+1. **Gmail Ingestion:** Scans targeted folders/labels and filters completed messages using a durable processing manifest in the configured Google Drive output folder.
 2. **AI Job Analysis:** Google Gemini `gemini-3.8-flash` compares job requirements with the factual master profile and applies the configured match threshold.
 3. **Document Generation:** Gemini tailors the resume template's `{{PLACEHOLDER}}` sections using profile evidence. The pipeline clones the separate template Google Doc, updates those sections, and exports a PDF.
 4. **Gmail Execution:** Creates a draft email in Gmail containing the cover letter and attached PDF resume.
@@ -32,7 +32,7 @@ The system adheres to a **Human-in-the-Loop** architecture: the agent automates 
 
 ## 🚀 Key Features
 
-* **Targeted Ingestion & Deduplication:** Scans designated Gmail labels (`Glassdoor`, `LinkedIn`, `Michael Page`, `Stepstone.de`) by message age and keywords, maintaining processed IDs in `processed_ids.json`.
+* **Targeted Ingestion & Deduplication:** Scans designated Gmail labels (`Glassdoor`, `LinkedIn`, `Michael Page`, `Stepstone.de`) and stores durable job statuses in a JSON manifest in Google Drive.
 * **Flexible Configuration (`config.yaml`):** Manage Gmail labels, target keywords, blacklists, match thresholds, and language preferences (`en`/`de`/`uk`) without modifying code.
 * **Intelligent ATS Analysis (LLM):** Evaluates job specs against your profile (Java / Spring Boot / Full-Stack), computes a `match_score`, and extracts missing keywords.
 * **Dynamic Resume Tailoring (Google Docs):** Clones your Google Docs resume template, updates relevant sections via Google Docs API while preserving styling, and exports a PDF.
@@ -55,7 +55,7 @@ ai-job-hunter/
 ├── config.yaml               # Central configuration file.
 ├── credentials.json          # Google OAuth 2.0 Client credentials (Git-ignored)
 ├── token.json                # Persisted OAuth session token (Git-ignored)
-├── processed_ids.json        # Database of processed email IDs (Git-ignored)
+├── processed_ids.json        # Local fast-path cache of processed email IDs (Git-ignored)
 ├── .env.example              # Environment variables template
 ├── requirements.txt          # Python project dependencies
 ├── README.md                 # Main project documentation
@@ -142,11 +142,11 @@ python -m unittest discover -s tests -v
 ```
 GitHub Actions runs the same command on pushes and pull requests using Python 3.11. The test workflow needs no Google, Gemini, or Telegram secrets.
 
-The orchestrator processes up to `limits.max_jobs_per_run` messages per run. It only creates a draft when the job data contains an explicit `application_email` or `recipient`; job alerts without an application address are recorded as skipped. Errors before draft creation leave the Gmail message eligible for retry. If Telegram fails after a draft is created, the report includes the draft link and the message is not reprocessed into a duplicate draft.
+The orchestrator processes up to `limits.max_jobs_per_run` messages per run. The durable `ai-job-hunter-processing-state.json` manifest in `google_docs.output_folder_id` tracks each Gmail message as `processing`, `resume_pending`, `resume_created`, `draft_pending`, `draft_created`, or `skipped`. It stores IDs, deterministic Drive/Gmail idempotency keys, timestamps, and notification status; it does not store job content or recipient addresses. Pending Drive artifacts and drafts are reconciled by their idempotency keys after an interrupted run. The local `processed_ids.json` remains a convenience cache only. Each run lists and downloads the manifest once, then reuploads the full JSON file at each state transition (several writes per handled job); Drive API usage and transfer size therefore grow with the manifest history. The manifest remains in the output folder until manually removed, so it should be periodically reviewed and pruned if the application is used long term.
 
 ### Scheduled GitHub Actions runs
 
-`.github/workflows/run_agent.yml` runs daily at 08:00 UTC and supports manual runs from the repository's **Actions** tab. Configure the `GEMINI_API_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, and `GOOGLE_TOKEN_JSON` repository secrets first. The workflow restores and saves `processed_ids.json` through the Actions cache so scheduled runs can retain Gmail deduplication state; a cold or evicted cache can cause recent messages to be processed again.
+`.github/workflows/run_agent.yml` runs daily at 08:00 UTC and supports manual runs from the repository's **Actions** tab. Configure the `GEMINI_API_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, and `GOOGLE_TOKEN_JSON` repository secrets first. Processing state is persisted to Google Drive and survives runner replacement and Actions cache eviction. Workflow runs are serialized across refs because they share one manifest. The manifest remains in the configured output folder until manually removed and grows by one compact record per handled Gmail message.
 
 ---
 

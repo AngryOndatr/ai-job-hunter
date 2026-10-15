@@ -124,6 +124,29 @@ class GmailDraftExecutorTests(unittest.TestCase):
         with self.assertRaisesRegex(GmailDraftError, "without an ID"):
             self.executor.create_draft(self.job, self.cover_letter, self.resume)
 
+    def test_idempotency_key_is_stable_and_does_not_expose_source_id(self):
+        first = GmailDraftExecutor.idempotency_message_id("gmail-source-123")
+        second = GmailDraftExecutor.idempotency_message_id("gmail-source-123")
+
+        self.assertEqual(first, second)
+        self.assertTrue(first.startswith("<ai-job-hunter-"))
+        self.assertNotIn("gmail-source-123", first)
+
+    def test_reuses_existing_draft_matching_idempotency_key(self):
+        self.service.users.return_value.drafts.return_value.list.return_value.execute.return_value = {
+            "drafts": [
+                {"id": "existing-draft", "message": {"id": "msg-id", "threadId": "thread-id"}}
+            ]
+        }
+        key = GmailDraftExecutor.idempotency_message_id("gmail-source-123")
+
+        result = self.executor.create_draft(
+            self.job, self.cover_letter, self.resume, idempotency_message_id=key
+        )
+
+        self.assertEqual(result["draft_id"], "existing-draft")
+        self.service.users.return_value.drafts.return_value.create.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()
