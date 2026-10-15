@@ -12,8 +12,8 @@ The system operates on a **Human-in-the-Loop** model: the agent automates all te
 2. `GoogleDriveManager` reads factual candidate information from the master profile Google Doc and discovers `{{PLACEHOLDER}}` sections in the separate resume template.
 3. `GeminiJobAnalyzer` scores each job against the profile and, for eligible jobs, generates tailored resume sections and a cover letter.
 4. `GoogleDriveManager` copies the template, replaces the requested sections, and exports a PDF.
-5. `GmailDraftExecutor` creates a draft with the cover letter and PDF attachment.
-6. `TelegramNotifier` sends the job summary and Gmail draft link.
+5. If an application recipient exists, `GmailDraftExecutor` creates a draft with the cover letter and PDF attachment. Without a recipient, Drive saves the resume and cover letter Docs/PDFs under a sanitized company folder.
+6. `TelegramNotifier` sends a draft link or links to both document-only PDFs, based on the route.
 
 ### AI input safety
 
@@ -40,8 +40,8 @@ The system reads processing settings from `config.yaml`:
    - Runs `main.py` on a scheduled cron without requiring a local machine to stay powered on.
    - Sensitive API tokens and credentials are stored in GitHub Repository Secrets; `token.json` is generated at runtime.
 3. **Android — Mobile control center**
-   - **Telegram Bot:** sends push notifications with match scores and quick-action links.
-   - **Gmail app:** lets you review the draft email and tailored PDF resume before sending.
+   - **Telegram Bot:** sends push notifications with match scores and application-material links.
+   - **Gmail app:** lets you review draft-based applications. Document-only materials are opened from Telegram or Google Drive.
 
 ## Pipeline Behavior
 

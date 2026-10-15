@@ -174,6 +174,7 @@ class PipelineTests(unittest.TestCase):
         self.analyzer.generate_tailored_sections.assert_called_once()
         self.analyzer.generate_cover_letter.assert_called_once()
         self.drive.create_tailored_resume.assert_not_called()
+        self.drive.create_document_only_application.assert_not_called()
         self.draft_executor.create_draft.assert_not_called()
         self.notifier.send_notification.assert_not_called()
         draft_factory.assert_not_called()
@@ -202,10 +203,15 @@ class PipelineTests(unittest.TestCase):
             [entry["reason"] for entry in report["skipped"]],
             ["below_match_threshold"],
         )
+        self.assertEqual(report["document_applications_created"], 0)
         self.assertEqual(
             report["would_create_documents"],
             [{"job_id": "gmail-message-2", "title": "Senior Java Engineer"}],
         )
+        self.drive.create_document_only_application.assert_not_called()
+        self.drive.create_tailored_resume.assert_not_called()
+        self.state_store.mark_status.assert_not_called()
+        self.notifier.send_document_only_notification.assert_not_called()
         self.collector.mark_processed.assert_not_called()
 
     def test_dry_run_routes_jobs_without_recipient_to_document_only_candidates(self):
@@ -224,6 +230,36 @@ class PipelineTests(unittest.TestCase):
             report["would_create_documents"],
             [{"job_id": "gmail-message-1", "title": "Senior Java Engineer"}],
         )
+
+    def test_dry_run_separates_both_eligible_routes_without_side_effects(self):
+        document_job = {**self.job, "id": "gmail-message-2", "application_email": ""}
+        self.collector.fetch_new_job_emails.return_value = [self.job, document_job]
+
+        report = run_pipeline(
+            config_path=str(self.config_path),
+            collector=self.collector,
+            analyzer=self.analyzer,
+            drive_manager=self.drive,
+            state_store=self.state_store,
+            dry_run=True,
+        )
+
+        self.assertEqual(
+            report["would_create_drafts"],
+            [{"job_id": "gmail-message-1", "title": "Senior Java Engineer"}],
+        )
+        self.assertEqual(
+            report["would_create_documents"],
+            [{"job_id": "gmail-message-2", "title": "Senior Java Engineer"}],
+        )
+        self.assertEqual(report["document_applications_created"], 0)
+        self.drive.create_tailored_resume.assert_not_called()
+        self.drive.create_document_only_application.assert_not_called()
+        self.draft_executor.create_draft.assert_not_called()
+        self.notifier.send_notification.assert_not_called()
+        self.notifier.send_document_only_notification.assert_not_called()
+        self.state_store.mark_status.assert_not_called()
+        self.collector.mark_processed.assert_not_called()
 
     def test_missing_recipient_creates_notifies_and_acknowledges_document_only_application(self):
         second_job = {**self.job, "id": "gmail-message-2", "application_email": ""}
@@ -250,6 +286,12 @@ class PipelineTests(unittest.TestCase):
         )
         self.assertEqual(report["errors"], [])
         self.drive.create_document_only_application.assert_called_once()
+        self.notifier.send_document_only_notification.assert_called_once_with(
+            second_job,
+            "https://drive.google.com/file/d/resume/view",
+            "https://drive.google.com/file/d/letter/view",
+        )
+        self.notifier.send_notification.assert_not_called()
         self.state_store.mark_status.assert_any_call("gmail-message-2", "processing")
         self.assertNotIn(
             unittest.mock.call(
@@ -258,7 +300,6 @@ class PipelineTests(unittest.TestCase):
             self.state_store.mark_status.call_args_list,
         )
         self.draft_executor.create_draft.assert_not_called()
-        self.notifier.send_notification.assert_not_called()
 
     def test_document_only_route_does_not_initialize_gmail_draft_executor(self):
         self.job["application_email"] = ""

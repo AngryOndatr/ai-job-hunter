@@ -1,6 +1,6 @@
 # 🤖 AI Job Hunter
 
-**AI Job Hunter** is an autonomous multi-agent pipeline built with Python to streamline and automate the job application process. The agent scans incoming job notifications in Gmail, evaluates role compatibility using Google Gemini `gemini-2.5-flash-lite`, tailors key resume sections for Applicant Tracking Systems (ATS), dynamically generates updated PDF resumes via the Google Docs API, creates ready-to-send Gmail drafts, and dispatches real-time push alerts to Telegram.
+**AI Job Hunter** is a Python pipeline that scans job alerts in Gmail, evaluates role compatibility with Google Gemini, and prepares tailored application materials. For eligible jobs with an application address, it creates a Gmail draft with the cover letter and PDF resume. For eligible jobs without an application address, it saves the resume and cover letter as Google Docs and PDFs in a company-specific Google Drive folder. Telegram links you to the prepared materials; the pipeline never sends an application email.
 
 The system adheres to a **Human-in-the-Loop** architecture: the agent automates all tedious preparation tasks while reserving final review and submission control for you.
 
@@ -9,24 +9,17 @@ The system adheres to a **Human-in-the-Loop** architecture: the agent automates 
 ## 📐 System Architecture
 
 ```text
-┌──────────────┐     ┌─────────────────────┐     ┌──────────────────────┐
-│  Gmail API   │ --> │ GmailJobCollector   │ --> │  JobAnalyzerAgent    │
-│  (Incoming)  │     │ (Scan & Deduplicate)│     │  (LLM / Gemini API)  │
-└──────────────┘     └─────────────────────┘     └──────────────────────┘
-                                                            │
-                                                            ▼
-┌──────────────┐     ┌─────────────────────┐     ┌──────────────────────┐
-│ Telegram Bot │ <-- │  Gmail Executor     │ <-- │ GoogleDriveManager   │
-│(Notification)│     │  (Create Draft)     │     │ (Clone, Tailor, PDF) │
-└──────────────┘     └─────────────────────┘     └──────────────────────┘
+Gmail → collect and deduplicate → Gemini analysis and tailoring → route by application address
+    address available     → resume PDF + Gmail draft → Telegram draft link
+    no address            → company Drive folder with resume/cover-letter Docs and PDFs → Telegram file links
 ```
 ## System Architecture Overview
 
 1. **Gmail Ingestion:** Scans targeted folders/labels and filters completed messages using a durable processing manifest in the configured Google Drive output folder.
 2. **AI Job Analysis:** Google Gemini `gemini-2.5-flash-lite` compares job requirements with the factual master profile and applies the configured match threshold.
-3. **Document Generation:** Gemini tailors the resume template's `{{PLACEHOLDER}}` sections using profile evidence. The pipeline clones the separate template Google Doc, updates those sections, and exports a PDF.
-4. **Gmail Execution:** Creates a draft email in Gmail containing the cover letter and attached PDF resume.
-5. **Notification:** Sends an immediate digest alert with direct links via Telegram Bot.
+3. **Document Generation:** Gemini tailors the resume template's `{{PLACEHOLDER}}` sections using profile evidence and generates a cover letter.
+4. **Application preparation:** With a recipient, creates a Gmail draft containing the cover letter and PDF resume. Without one, stores both documents and their PDFs under `Output Folder/<Company Name>`; missing or unsafe company names are handled safely.
+5. **Notification:** Sends a Telegram alert with a Gmail draft link or links to the document-only PDFs, depending on the route.
 
 ---
 
@@ -37,8 +30,8 @@ The system adheres to a **Human-in-the-Loop** architecture: the agent automates 
 * **Intelligent ATS Analysis (LLM):** Evaluates job specs against your profile (Java / Spring Boot / Full-Stack), computes a `match_score`, and extracts missing keywords.
 * **Dynamic Resume Tailoring (Google Docs):** Clones your Google Docs resume template, updates relevant sections via Google Docs API while preserving styling, and exports a PDF.
 * **Cover Letter Generation:** Drafts personalized cover letters tailored to specific role requirements in your configured language.
-* **Safe Delivery (Gmail Drafts):** Automatically attaches the tailored PDF resume and populates the cover letter in a Gmail draft.
-* **Telegram Notifications:** Dispatches structured summary alerts with direct deep-links to Gmail drafts.
+* **Two application paths:** Creates Gmail drafts when an application address is available, or company-folder documents when it is not.
+* **Telegram Notifications:** Links to the Gmail draft or to both PDFs in the company Drive folder.
 
 ## 🔒 AI Input and Content Safety
 
@@ -103,9 +96,9 @@ Configure two different Google Docs in `config.yaml`:
 
 The profile and template IDs must refer to different documents. To migrate from the previous single-document setup, keep the old `master_resume_doc_id` value as `master_profile_doc_id`, create or choose a separate Google Docs resume layout with placeholders, and set its ID as `resume_template_doc_id`. The sample config contains a `REPLACE_WITH_RESUME_TEMPLATE_DOC_ID` marker that must be replaced before running the pipeline.
 
-`gmail_executor.py` creates a Gmail draft from the generated cover letter and PDF. Job data must include an explicit application address in `application_email` or `recipient`; the sender of a job alert is never treated as the employer's application address. The executor creates drafts only and does not send email.
+`gmail_executor.py` creates a Gmail draft from the generated cover letter and PDF when job data includes an explicit application address in `application_email` or `recipient`; the sender of a job alert is never treated as the employer's application address. Without a recipient, the pipeline saves both documents and PDFs under a sanitized company folder and does not initialize the Gmail draft executor. Neither path sends application email.
 
-`telegram_notifier.py` sends a plain-text notification with the role, company, match score, analysis summary, and Gmail draft link using `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` from the environment.
+`telegram_notifier.py` sends a plain-text notification using `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`. Draft notifications include the role, company, match score, analysis summary, and Gmail draft link. Document-only notifications include the role, company, and links to the resume and cover-letter PDFs.
 
 ### 4. Gemini API Key (GEMINI_API_KEY)
 1. Перейдите в [Google AI Studio](https://aistudio.google.com/).
