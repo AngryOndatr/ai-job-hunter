@@ -57,6 +57,38 @@ class GeminiJobAnalyzerTests(unittest.TestCase):
         self.assertEqual(call["model"], self.analyzer.model)
         self.assertIn("Senior Java Engineer", call["contents"])
 
+    def test_analyzes_digest_split_record_with_company_and_job_url(self):
+        """Digest-split records carry company/job_url fields used for tailoring."""
+        self.set_response(
+            {
+                "match_score": 80,
+                "matching_skills": ["Java"],
+                "missing_keywords": [],
+                "summary": "Good fit.",
+            }
+        )
+
+        result = self.analyzer.analyze_job(
+            {
+                "id": "msg-1:4489714169",
+                "subject": "You may be a fit for Zenjob's role",
+                "sender": "jobalerts-noreply@linkedin.com",
+                "source": "LinkedIn",
+                "job_title": "Full-Stack Engineer (f/m/d)",
+                "company": "Zenjob",
+                "location": "Berlin, Germany",
+                "job_url": "https://www.linkedin.com/comm/jobs/view/4489714169/",
+                "job_id": "4489714169",
+                "body": "Full-Stack Engineer (f/m/d)\nZenjob\nBerlin, Germany",
+            },
+            "Java engineer profile.",
+        )
+
+        self.assertTrue(result["eligible_for_draft"])
+        call = self.client.models.generate_content.call_args.kwargs
+        self.assertIn("Zenjob", call["contents"])
+        self.assertIn("Full-Stack Engineer (f/m/d)", call["contents"])
+
     def test_marks_score_below_configured_threshold_ineligible(self):
         self.set_response(
             {

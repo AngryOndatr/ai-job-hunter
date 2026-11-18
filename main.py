@@ -13,6 +13,7 @@ from typing import Any
 
 from dotenv import load_dotenv
 
+from logging_setup import configure_logging, get_logger
 from ai_tailor import GeminiJobAnalyzer
 from drive_service import GoogleDriveManager
 from gmail_collector import GmailJobCollector
@@ -43,6 +44,9 @@ def run_pipeline(
     started_at = datetime.now(timezone.utc)
     started_clock = time.monotonic()
     run_id = uuid.uuid4().hex
+    configure_logging()
+    logger = get_logger("pipeline")
+    logger.info("run started run_id=%s dry_run=%s", run_id, dry_run)
     load_dotenv()
     config = load_validated_config(config_path)
     configured_max_jobs = config["limits"]["max_jobs_per_run"]
@@ -94,7 +98,12 @@ def run_pipeline(
         "errors": [],
     }
     if not batch:
-        return _finalize_report(report, started_clock)
+        report = _finalize_report(report, started_clock)
+        logger.info(
+            "run finished status=%s fetched=%d attempted=0 duration=%.3fs",
+            report["status"], report["fetched"], report["duration_seconds"],
+        )
+        return report
 
     analyzer = analyzer or GeminiJobAnalyzer(config_path=config_path)
     drive_manager = drive_manager or GoogleDriveManager(config_path=config_path)
@@ -110,11 +119,15 @@ def run_pipeline(
         raise ValueError("The resume template has no replaceable sections.")
 
     for job_index, job in enumerate(batch, start=1):
-        print(f"Processing job {job_index}/{len(batch)}.", flush=True)
+        job_started_clock = time.monotonic()
         message_id = job.get("id") if isinstance(job, Mapping) else None
         title = _job_title(job) if isinstance(job, Mapping) else "Unknown job"
         stage = "analysis"
         draft = None
+        logger.info(
+            "job start index=%d/%d job_id=%s title=%s",
+            job_index, len(batch), message_id, title,
+        )
         try:
             if not isinstance(message_id, str) or not message_id:
                 raise ValueError("Collected job is missing its Gmail message ID.")
@@ -167,7 +180,9 @@ def run_pipeline(
                         )
                 continue
 
-            print(f"Job {job_index}/{len(batch)}: Gemini analysis.", flush=True)
+            logger.info(
+                "job stage job_id=%s stage=analysis", message_id
+            )
             analysis = analyzer.analyze_job(job, master_profile)
             if not analysis.get("eligible_for_draft"):
                 if not dry_run:
@@ -183,7 +198,10 @@ def run_pipeline(
                 draft_executor = GmailDraftExecutor(config_path=config_path)
 
             stage = "resume_tailoring"
-            print(f"Job {job_index}/{len(batch)}: tailoring outputs.", flush=True)
+            logger.info(
+                "job stage job_id=%s stage=resume_tailoring placeholders=%s",
+                message_id, list(placeholders),
+            )
             tailored_sections = analyzer.generate_tailored_sections(
                 job, master_profile, analysis, placeholders
             )
@@ -380,13 +398,29 @@ def run_pipeline(
                     _error_record(message_id, title, stage, exc, draft=draft)
                 )
         except Exception as exc:
-            report["errors"].append(
-                _error_record(message_id, title, stage, exc, draft=draft)
+            error_record = _error_record(message_id, title, stage, exc, draft=draft)
+            report["errors"].append(error_record)
+            logger.error(
+                "job failed job_id=%s stage=%s error=%s",
+                message_id, stage, error_record["error"],
             )
         finally:
-            print(f"Finished job {job_index}/{len(batch)}.", flush=True)
+            job_elapsed = round(time.monotonic() - job_started_clock, 3)
+            logger.info(
+                "job finish index=%d/%d job_id=%s stage=%s elapsed=%.3fs",
+                job_index, len(batch), message_id, stage, job_elapsed,
+            )
 
-    return _finalize_report(report, started_clock)
+    report = _finalize_report(report, started_clock)
+    logger.info(
+        "run finished status=%s fetched=%d attempted=%d drafts=%d documents=%d "
+        "notifications=%d skipped=%d errors=%d duration=%.3fs",
+        report["status"], report["fetched"], report["attempted"],
+        report["drafts_created"], report["document_applications_created"],
+        report["notifications_sent"], len(report["skipped"]),
+        len(report["errors"]), report["duration_seconds"],
+    )
+    return report
 
 
 def _finalize_report(report: dict[str, Any], started_clock: float) -> dict[str, Any]:

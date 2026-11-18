@@ -1,11 +1,19 @@
 import os
 import json
+import re
 import base64
 from datetime import datetime, timedelta, timezone
 from googleapiclient.discovery import build
 import yaml
 
 from google_auth import BASE_SCOPES, get_google_credentials
+from logging_setup import get_logger
+
+logger = get_logger("gmail_collector")
+
+_VIEW_JOB_URL_RE = re.compile(r"View job:\s*(https?://\S+)")
+_JOB_ID_RE = re.compile(r"/jobs/view/(\d+)")
+_SEPARATOR_RE = re.compile(r"^-{10,}\s*$")
 
 class GmailJobCollector:
     def __init__(self, config_path="config.yaml"):
@@ -58,7 +66,7 @@ class GmailJobCollector:
         for label_name in self.target_labels:
             label_id = label_map.get(label_name)
             if not label_id:
-                print(f"⚠️ Метка '{label_name}' не найдена в вашем Gmail. Пропускаем.")
+                logger.warning("Label '%s' not found in Gmail; skipping.", label_name)
                 continue
 
             query = f"after:{int(cutoff_date.timestamp())}"
@@ -85,15 +93,19 @@ class GmailJobCollector:
 
                     parsed_email = self._parse_message(msg_detail, label_name)
                     if parsed_email:
-                        all_messages.append(parsed_email)
+                        digest_jobs = self._split_digest(parsed_email)
+                        if digest_jobs:
+                            all_messages.extend(digest_jobs)
+                        else:
+                            all_messages.append(parsed_email)
                         discovered_ids.add(msg_id)
                         if not defer_processed:
                             self.processed_ids.add(msg_id)
 
             except Exception as exc:
-                print(
-                    "Failed to scan a configured Gmail label "
-                    f"({type(exc).__name__}); details redacted."
+                logger.error(
+                    "Failed to scan Gmail label %s (%s); details redacted.",
+                    label_name, type(exc).__name__,
                 )
 
         if not defer_processed:
@@ -144,6 +156,67 @@ class GmailJobCollector:
             if data:
                 body = base64.urlsafe_b64decode(data).decode('utf-8', errors='ignore')
         return body
+
+    @staticmethod
+    def _split_digest(parsed_email):
+        """Split a multi-job digest email into one record per job listing.
+
+        Returns an empty list when the body is not a digest (fewer than two
+        ``View job:`` links), so callers fall back to the original record.
+        Each split record keeps the source message metadata but gets a
+        per-job synthetic ID (``<message_id>:<job_id>``), the extracted
+        title/company/location, the job URL, and its own body block.
+        """
+        body = parsed_email.get("body", "")
+        if not isinstance(body, str):
+            return []
+        if len(_VIEW_JOB_URL_RE.findall(body)) < 2:
+            return []
+
+        chunks = []
+        current = []
+        for line in body.splitlines():
+            if _SEPARATOR_RE.match(line.strip()):
+                if current:
+                    chunks.append("\n".join(current))
+                    current = []
+                continue
+            current.append(line)
+        if current:
+            chunks.append("\n".join(current))
+
+        jobs = []
+        for chunk in chunks:
+            match = _VIEW_JOB_URL_RE.search(chunk)
+            if not match:
+                continue
+            job_url = match.group(1).rstrip(".,;)")
+            id_match = _JOB_ID_RE.search(job_url)
+            job_id = id_match.group(1) if id_match else ""
+            lines = [ln.strip() for ln in chunk.splitlines() if ln.strip()]
+            hiring_idx = next(
+                (i for i, ln in enumerate(lines)
+                 if ln.lower().startswith("this company is actively hiring")),
+                None,
+            )
+            header = lines[:hiring_idx] if hiring_idx is not None else lines
+            if len(header) >= 3:
+                title, company, location = header[-3], header[-2], header[-1]
+            elif len(header) == 2:
+                title, company, location = header[-2], header[-1], ""
+            else:
+                continue
+            record = dict(parsed_email)
+            if job_id:
+                record["id"] = f"{parsed_email['id']}:{job_id}"
+            record["job_title"] = title
+            record["company"] = company
+            record["location"] = location
+            record["job_url"] = job_url
+            record["job_id"] = job_id
+            record["body"] = chunk.strip()
+            jobs.append(record)
+        return jobs
 
 
 if __name__ == "__main__":
